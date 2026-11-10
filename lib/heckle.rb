@@ -166,7 +166,9 @@ class Heckle
 
   def install(mutation)
     remove_live_method
-    eval(wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file, def_node.location.start_line)
+    prelude = magic_comments
+    eval(prelude + wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file,
+         def_node.location.start_line - prelude.count("\n"))
     @owner.send(@visibility, @name)
     @installed = true
   end
@@ -404,10 +406,30 @@ class Heckle
     not_found("no source location") unless @file
     not_found("source file #{@file} is not readable") unless File.file?(@file)
 
-    found = MethodFinder.new(File.read(@file)).find(klass_name, method_name, line: @line)
+    source = File.read(@file)
+    found = MethodFinder.new(source).find(klass_name, method_name, line: @line)
     not_found("no def at #{@file}:#{@line}") unless found
 
+    @frozen_string_literal = leading_frozen_string_literal(source)
     found
+  end
+
+  # Ruby honours frozen_string_literal only before the first token, and the
+  # last such comment wins. Prism reports comments anywhere in the file.
+  def leading_frozen_string_literal(source)
+    result = Prism.parse(source)
+    first_token = result.value.location.start_offset
+    result.magic_comments
+      .select { |comment| comment.key == "frozen_string_literal" }
+      .select { |comment| comment.key_loc.start_offset < first_token }
+      .last&.value
+  end
+
+  # One line per comment; install starts the eval that many lines earlier.
+  def magic_comments
+    return "" unless @frozen_string_literal
+
+    "# frozen_string_literal: #{@frozen_string_literal}\n"
   end
 
   def visibility

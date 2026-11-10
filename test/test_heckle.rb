@@ -1,6 +1,7 @@
 require "minitest/autorun"
 require "fixtures/heckle_dummy"
 require "fixtures/heckle_subjects"
+require "fixtures/heckle_frozen"
 require "heckle"
 
 class TestHeckler < Heckle
@@ -51,6 +52,7 @@ end
 class TestHeckle < Minitest::Test
   DUMMY = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
   SUBJECTS = File.expand_path("fixtures/heckle_subjects.rb", __dir__)
+  FROZEN = File.expand_path("fixtures/heckle_frozen.rb", __dir__)
 
   def heckle(klass_name, method_name, nodes = Heckle::MUTATABLE_NODES)
     heckler = TestHeckler.new(klass_name, method_name, nodes)
@@ -181,6 +183,34 @@ class TestHeckle < Minitest::Test
     frame = error.backtrace_locations.first
     assert_equal [SUBJECTS, 28], [frame.path, frame.lineno]
     assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[27].strip
+  end
+
+  def test_mutant_keeps_frozen_string_literal_comment
+    assert_equal [1, true], HeckleFrozen.new.literal_frozen
+    install_only("HeckleFrozen", "literal_frozen", [:lit])
+
+    assert_equal [6, true], HeckleFrozen.new.literal_frozen
+  end
+
+  def test_mutant_backtrace_line_with_magic_comment
+    install_only("HeckleFrozen", "explode", [:lit])
+
+    error = assert_raises(ArgumentError) { HeckleFrozen.new.explode }
+    frame = error.backtrace_locations.first
+    assert_equal [FROZEN, 10], [frame.path, frame.lineno]
+    assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(FROZEN)[9].strip
+  end
+
+  def test_install_with_magic_comment_is_silent_under_verbose
+    verbose = $VERBOSE
+    assert_silent do
+      $VERBOSE = true
+      heckler = heckle("HeckleFrozen", "literal_frozen", [:lit])
+      heckler.install(heckler.mutations.first)
+      heckler.restore
+    end
+  ensure
+    $VERBOSE = verbose
   end
 
   def scripted(klass_name, method_name, nodes, reporter = RecordingReporter.new, &script)
