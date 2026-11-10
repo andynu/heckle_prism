@@ -34,7 +34,31 @@ class Heckle
       super
     end
 
+    def visit_integer_node(node)
+      replace(:lit, node.location, number(node.value + @randomizer.rand_number))
+      super
+    end
+
+    def visit_float_node(node)
+      value = node.value + @randomizer.rand_number
+      replace(:lit, node.location, number(value)) if value.finite?
+      super
+    end
+
+    # The numeric part of 2r or 3i is not a mutation site of its own.
+    def visit_rational_node(node)
+    end
+
+    def visit_imaginary_node(node)
+    end
+
     private
+
+    # Parenthesized when negative so a preceding `-` or a following `**`
+    # cannot rebind it (`-3 ** 2` is -9).
+    def number(value)
+      value.negative? ? "(#{value})" : value.to_s
+    end
 
     def replace(kind, location, replacement)
       @mutations << Mutation.new(kind, location.start_offset, location.end_offset, replacement)

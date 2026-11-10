@@ -86,6 +86,108 @@ class TestMutator < Minitest::Test
     assert_mutants expected, fixture_mutants("self.is_a_klass_method?", [:true, :false])
   end
 
+  def test_numeric_literals
+    expected = [
+      <<~RUBY,
+        def uses_numeric_literals
+          i = 6
+          i += 2147483648
+          i -= 3.5
+        end
+      RUBY
+      <<~RUBY,
+        def uses_numeric_literals
+          i = 1
+          i += 2147483653
+          i -= 3.5
+        end
+      RUBY
+      <<~RUBY,
+        def uses_numeric_literals
+          i = 1
+          i += 2147483648
+          i -= 8.5
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_numeric_literals", :lit)
+  end
+
+  def test_same_literal_mutates_each_site
+    expected = [
+      <<~RUBY,
+        def uses_same_literal
+          i = 6
+          i = 1
+          i = 1
+        end
+      RUBY
+      <<~RUBY,
+        def uses_same_literal
+          i = 1
+          i = 6
+          i = 1
+        end
+      RUBY
+      <<~RUBY,
+        def uses_same_literal
+          i = 1
+          i = 1
+          i = 6
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_same_literal", :lit)
+  end
+
+  def test_single_literal
+    expected = [
+      <<~RUBY,
+        def uses_literal
+          i = 6
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_literal", :lit)
+  end
+
+  def test_negative_literal
+    mutants = inline_mutants("def m\n  -1\nend\n", :lit)
+
+    assert_mutants ["def m\n  4\nend\n"], mutants
+    assert_equal 4, call_mutant(mutants.first, :m)
+  end
+
+  def test_literal_as_right_operand_of_binary_minus
+    mutants = inline_mutants("def m(x)\n  x-1\nend\n", :lit)
+
+    assert_mutants ["def m(x)\n  x-6\nend\n"], mutants
+    assert_equal 4, call_mutant(mutants.first, :m, 10)
+  end
+
+  def test_negative_result_is_parenthesized
+    randomizer = Randomizer.new(-10, "l33t h4x0r", :"l33t h4x0r", 5..10)
+    mutants = inline_mutants("def m(x)\n  x-1 + 2 ** 2\nend\n", :lit, randomizer)
+
+    assert_mutants ["def m(x)\n  x-(-9) + 2 ** 2\nend\n",
+                    "def m(x)\n  x-1 + (-8) ** 2\nend\n",
+                    "def m(x)\n  x-1 + 2 ** (-8)\nend\n"], mutants
+    assert_equal [17, 67, 3 + 2r**-8], mutants.map { |mutant| call_mutant(mutant, :m, 4) }
+  end
+
+  def test_float_literal
+    mutants = inline_mutants("def m\n  1.25\nend\n", :lit)
+
+    assert_mutants ["def m\n  6.25\nend\n"], mutants
+  end
+
+  def test_rationals_and_imaginaries_are_not_mutated
+    assert_empty inline_mutants("def m\n  [2r, 3i, 1.5r]\nend\n", :lit)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
