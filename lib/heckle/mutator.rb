@@ -65,6 +65,17 @@ class Heckle
       super
     end
 
+    # A range of two integer literals is one site; its ends are not mutated
+    # separately. Any other range is descended into. Always inclusive.
+    def visit_range_node(node)
+      unless node.left.is_a?(Prism::IntegerNode) && node.right.is_a?(Prism::IntegerNode)
+        return super
+      end
+
+      range = @randomizer.rand_range
+      replace(:lit, node.location, "#{range.begin}..#{range.end}")
+    end
+
     # Method names here are not values.
     def visit_alias_method_node(node)
     end

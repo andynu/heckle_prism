@@ -386,6 +386,51 @@ class TestMutator < Minitest::Test
     assert_empty inline_mutants("def m(b)\n  /a\#{b}c/\nend\n", [:lit, :str])
   end
 
+  def test_ranges
+    expected = [
+      <<~RUBY,
+        def uses_ranges
+          i = 5..10
+          i = -1..9
+          i = 1..4
+        end
+      RUBY
+      <<~RUBY,
+        def uses_ranges
+          i = 6..100
+          i = 5..10
+          i = 1..4
+        end
+      RUBY
+      <<~RUBY,
+        def uses_ranges
+          i = 6..100
+          i = -1..9
+          i = 5..10
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_ranges", :lit)
+  end
+
+  def test_range_with_negative_end_is_one_mutation
+    assert_mutants ["def m\n  5..10\nend\n"],
+                   inline_mutants("def m\n  -1..9\nend\n", :lit)
+  end
+
+  def test_exclusive_range_becomes_inclusive_random_range
+    mutants = inline_mutants("def m\n  (1...4).to_a\nend\n", :lit)
+
+    assert_mutants ["def m\n  (5..10).to_a\nend\n"], mutants
+    assert_equal (5..10).to_a, call_mutant(mutants.first, :m)
+  end
+
+  def test_range_with_non_literal_end_mutates_only_the_literal
+    assert_mutants ["def m(a)\n  a..15\nend\n"],
+                   inline_mutants("def m(a)\n  a..10\nend\n", :lit)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
