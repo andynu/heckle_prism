@@ -201,11 +201,18 @@ class Heckle
   end
 
   ##
-  # Runs every loaded Minitest runnable in-process and returns true when all
-  # passed (skips count as passing). Silent unless Heckle.debug. Override
-  # for another test framework.
+  # Runs the tests against whatever is installed. Override for another test
+  # framework.
 
   def tests_pass?
+    self.class.tests_pass?
+  end
+
+  ##
+  # Runs every loaded Minitest runnable in-process and returns true when all
+  # passed (skips count as passing). Silent unless Heckle.debug.
+
+  def self.tests_pass?
     Minitest.seed ||= Random.new_seed % 0xFFFF
     options = { seed: Minitest.seed, args: "--seed #{Minitest.seed}" }
 
@@ -229,6 +236,19 @@ class Heckle
       reporter.passed?
     end
   end
+
+  def self.quietly
+    return yield if @@debug
+
+    stdout, stderr = $stdout, $stderr
+    File.open(NULL_PATH, "w") do |null|
+      $stdout = $stderr = null
+      yield
+    ensure
+      $stdout, $stderr = stdout, stderr
+    end
+  end
+  private_class_method :quietly
 
   def run_tests
     if tests_pass? then
@@ -405,18 +425,6 @@ class Heckle
     @found.def_node
   end
 
-  def quietly
-    return yield if @@debug
-
-    stdout, stderr = $stdout, $stderr
-    File.open(NULL_PATH, "w") do |null|
-      $stdout = $stderr = null
-      yield
-    ensure
-      $stdout, $stderr = stdout, stderr
-    end
-  end
-
   def not_found(reason)
     raise SourceNotFound, "#{klass_name}##{method_name}: #{reason}"
   end
@@ -492,10 +500,17 @@ class Heckle
     end
   end
 
-  # Removing first keeps -w from warning about a redefinition.
+  # Removing first keeps -w from warning about a redefinition. Ruby also
+  # warns on removing initialize, which is harmless here because a
+  # definition goes straight back.
   def remove_live_method
     defined = @owner.method_defined?(@name, false) || @owner.private_method_defined?(@name, false)
-    @owner.send(:remove_method, @name) if defined
+    return unless defined
+
+    verbose, $VERBOSE = $VERBOSE, nil
+    @owner.send(:remove_method, @name)
+  ensure
+    $VERBOSE = verbose if defined
   end
 
   # `module A; class B; class << self; <def>\nend; end; end` on the def's

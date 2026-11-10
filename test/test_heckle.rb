@@ -185,6 +185,20 @@ class TestHeckle < Minitest::Test
     assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[27].strip
   end
 
+  def test_install_and_restore_initialize_silently_under_verbose
+    verbose = $VERBOSE
+    assert_silent do
+      $VERBOSE = true
+      heckler = install_only("HeckleSubjectsInit", "initialize", [:lit])
+      assert_equal 47, HeckleSubjectsInit.new.value
+      heckler.restore
+    end
+    assert_equal 42, HeckleSubjectsInit.new.value
+    assert HeckleSubjectsInit.private_method_defined?(:initialize, false)
+  ensure
+    $VERBOSE = verbose
+  end
+
   def test_mutant_keeps_frozen_string_literal_comment
     assert_equal [1, true], HeckleFrozen.new.literal_frozen
     install_only("HeckleFrozen", "literal_frozen", [:lit])

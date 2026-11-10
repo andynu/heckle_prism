@@ -62,3 +62,11 @@ module HeckleNesting
     end
   end
 end
+
+class HeckleSubjectsInit
+  attr_reader :value
+
+  def initialize
+    @value = 42
+  end
+end
