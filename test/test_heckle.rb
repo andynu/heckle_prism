@@ -21,6 +21,33 @@ class TestHeckler < Heckle
   end
 end
 
+# Records reporter calls as [name, *args] instead of printing.
+class RecordingReporter
+  attr_reader :calls
+
+  def initialize
+    @calls = []
+  end
+
+  %i[no_mutations method_loaded remaining_mutations warning info no_failures
+     failure no_surviving_mutants replacing report_test_failures].each do |name|
+    define_method(name) { |*args| @calls << [name, *args] }
+  end
+
+  def names
+    calls.map(&:first)
+  end
+end
+
+# tests_pass? answers from a script called with the heckler.
+class ScriptedHeckler < TestHeckler
+  attr_accessor :script
+
+  def tests_pass?
+    script.call(self)
+  end
+end
+
 class TestHeckle < Minitest::Test
   DUMMY = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
   SUBJECTS = File.expand_path("fixtures/heckle_subjects.rb", __dir__)
@@ -154,6 +181,146 @@ class TestHeckle < Minitest::Test
     frame = error.backtrace_locations.first
     assert_equal [SUBJECTS, 28], [frame.path, frame.lineno]
     assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[27].strip
+  end
+
+  def scripted(klass_name, method_name, nodes, reporter = RecordingReporter.new, &script)
+    heckler = ScriptedHeckler.new(klass_name, method_name, nodes, reporter)
+    heckler.script = script
+    (@hecklers ||= []) << heckler
+    heckler
+  end
+
+  def with_timeout(seconds)
+    saved = [Heckle.class_variable_get(:@@timeout), Heckle.class_variable_get(:@@guess_timeout)]
+    Heckle.timeout = seconds
+    yield
+  ensure
+    Heckle.class_variable_set(:@@timeout, saved[0])
+    Heckle.class_variable_set(:@@guess_timeout, saved[1])
+  end
+
+  def test_tests_pass_is_abstract
+    assert_raises(NotImplementedError) { Heckle.new("HeckleSubjects", "answer").tests_pass? }
+  end
+
+  def test_validate_without_mutations
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk "no run expected" }
+
+    assert_nil heckler.validate
+    assert_equal [[:no_mutations, :uses_nothing]], reporter.calls
+    assert_equal 0, heckler.count
+  end
+
+  def test_validate_all_killed
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) { false }
+
+    assert_equal true, heckler.validate
+    assert_equal [
+      [:method_loaded, "HeckleSubjects", :pair, 2],
+      [:remaining_mutations, 2],
+      [:report_test_failures],
+      [:remaining_mutations, 1],
+      [:report_test_failures],
+      [:no_surviving_mutants],
+    ], reporter.calls
+    assert_empty heckler.failures
+    assert_equal 2, heckler.count
+  end
+
+  def test_validate_with_survivor
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) { |h| h.count == 1 }
+    survivor = "def pair\n    [6, 2]\n  end"
+
+    assert_equal false, heckler.validate
+    assert_equal [survivor], heckler.failures
+    assert_equal [:no_failures, :failure], reporter.names.last(2)
+    assert_equal [:failure, "def pair\n    [1, 2]\n  end", survivor], reporter.calls.last
+  end
+
+  def test_tests_run_against_installed_mutant
+    seen = []
+    heckler = scripted("HeckleSubjects", "pair", [:lit]) do
+      seen << HeckleSubjects.new.pair
+      false
+    end
+
+    heckler.validate
+    assert_equal [[6, 2], [1, 7]], seen
+    assert_equal [1, 2], HeckleSubjects.new.pair
+  end
+
+  def test_timeout_is_reported_and_loop_continues
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) do |h|
+      sleep 5 if h.count == 1
+      true
+    end
+
+    result = with_timeout(0.05) { heckler.validate }
+
+    assert_equal false, result
+    assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
+    assert_equal 2, heckler.count
+    assert_includes reporter.calls,
+                    [:warning, "Your tests timed out. Heckle may have caused an infinite loop."]
+    assert_equal [1, 2], HeckleSubjects.new.pair
+  end
+
+  def test_syntax_error_is_reported_and_loop_continues
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) do |h|
+      raise SyntaxError, "bad mutant" if h.count == 1
+      false
+    end
+
+    assert_equal true, heckler.validate
+    assert_equal 2, heckler.count
+    assert_includes reporter.calls, [:warning, "Mutation caused a syntax error:\n\nbad mutant"]
+  end
+
+  def test_exception_in_tests_propagates_and_restores
+    heckler = scripted("HeckleSubjects", "answer", [:lit]) { raise "test runner broke" }
+
+    error = assert_raises(RuntimeError) { heckler.validate }
+    assert_equal "test runner broke", error.message
+    assert_equal 42, HeckleSubjects.new.answer
+  end
+
+  def test_unimplemented_tests_pass_restores
+    heckler = TestHeckler.new("HeckleSubjects", "answer", [:lit], RecordingReporter.new)
+
+    assert_raises(NotImplementedError) { heckler.validate }
+    assert_equal 42, HeckleSubjects.new.answer
+  end
+
+  def test_validate_twice_gives_same_result
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) { |h| h.count == 2 }
+
+    first = [heckler.validate, heckler.failures.dup, heckler.count, reporter.calls.dup]
+    reporter.calls.clear
+    second = [heckler.validate, heckler.failures.dup, heckler.count, reporter.calls.dup]
+
+    assert_equal first, second
+    assert_equal false, first[0]
+    assert_equal ["def pair\n    [1, 7]\n  end"], first[1]
+  end
+
+  def test_real_reporter_output
+    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { |h| h.count == 1 }
+
+    out, _err = capture_io { heckler.validate }
+
+    assert_includes out, "***  HeckleSubjects#pair loaded with 2 possible mutations\n"
+    assert_includes out, "2 mutations remaining...\n"
+    assert_includes out, "1 mutations remaining...\n"
+    assert_includes out, "The following mutations didn't cause test failures:\n"
+    assert_includes out, "--- original\n+++ mutation\n"
+    assert_includes out, "\n-    [1, 2]\n"
+    assert_includes out, "\n+    [6, 2]\n"
   end
 
   def test_install_and_restore_are_silent_under_verbose

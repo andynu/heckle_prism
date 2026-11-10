@@ -184,6 +184,77 @@ class Heckle
   end
 
   ##
+  # Overwrite test_pass? for your own Heckle runner.
+
+  def tests_pass?
+    raise NotImplementedError
+  end
+
+  def run_tests
+    if tests_pass? then
+      record_passing_mutation
+    else
+      @reporter.report_test_failures
+    end
+  end
+
+  ##
+  # Runs the tests against each mutant in turn. Returns nil when there is
+  # nothing to mutate, true when every mutant was killed, false otherwise.
+  # Any exception other than SyntaxError, a timeout or Interrupt propagates,
+  # with the original method restored.
+
+  def validate
+    @count = 0
+    @failures = []
+
+    if mutations.empty? then
+      @reporter.no_mutations(method_name)
+      return
+    end
+
+    @reporter.method_loaded(klass_name, method_name, mutations.size)
+
+    mutations.each_with_index do |mutation, index|
+      @reporter.remaining_mutations(mutations.size - index)
+      @current_mutation = mutation
+      begin
+        if @@debug
+          @reporter.replacing(klass_name, method_name, original_source, mutant_source(mutation))
+        end
+
+        self.count += 1
+        install mutation
+        ::Timeout::timeout(@@timeout, Heckle::Timeout) { run_tests }
+      rescue SyntaxError => e
+        @reporter.warning "Mutation caused a syntax error:\n\n#{e.message}"
+      rescue Heckle::Timeout
+        @reporter.warning "Your tests timed out. Heckle may have caused an infinite loop."
+      rescue Interrupt
+        @reporter.warning 'Mutation canceled, hit ^C again to exit'
+        sleep 2
+      ensure
+        restore
+      end
+    end
+
+    unless @failures.empty?
+      @reporter.no_failures
+      @failures.each do |failure|
+        @reporter.failure(original_source, failure)
+      end
+      false
+    else
+      @reporter.no_surviving_mutants
+      true
+    end
+  end
+
+  def record_passing_mutation
+    @failures << mutant_source(@current_mutation)
+  end
+
+  ##
   # Returns a random Fixnum.
 
   def rand_number
