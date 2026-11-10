@@ -75,6 +75,25 @@ class Heckle
       super
     end
 
+    # Every form must behave as the node with its branches swapped. `unless`
+    # cannot take an `elsif`, so an `if` with one, the `elsif` itself and a
+    # ternary (no keyword) negate the predicate instead.
+    def visit_if_node(node)
+      keyword = node.if_keyword_loc
+      if keyword&.slice == "if" && !node.subsequent.is_a?(Prism::IfNode)
+        replace(:if, keyword, "unless")
+      else
+        predicate = node.predicate.location
+        replace(:if, predicate, "!(#{predicate.slice})")
+      end
+      super
+    end
+
+    def visit_unless_node(node)
+      replace(:if, node.keyword_loc, "if")
+      super
+    end
+
     # A range of two integer literals is one site; its ends are not mutated
     # separately. Any other range is descended into. Always inclusive.
     def visit_range_node(node)

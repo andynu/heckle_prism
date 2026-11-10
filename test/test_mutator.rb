@@ -491,6 +491,179 @@ class TestMutator < Minitest::Test
     assert_mutants [expected], inline_mutants(source, [:while, :until])
   end
 
+  # Asserts mutant returns what reference returns for every argument list.
+  def assert_same_behavior(reference, mutant, name, arg_lists)
+    expected = arg_lists.map { |args| call_mutant(reference, name, *args) }
+    actual = arg_lists.map { |args| call_mutant(mutant, name, *args) }
+    assert_equal expected, actual
+  end
+
+  TRUTHS = [[true], [false], [nil], [0]]
+  TRUTH_PAIRS = [true, false].product([true, false])
+
+  def test_if
+    expected = [
+      <<~RUBY,
+        def uses_if
+          unless some_func
+            if some_other_func
+              return
+            end
+          end
+        end
+      RUBY
+      <<~RUBY,
+        def uses_if
+          if some_func
+            unless some_other_func
+              return
+            end
+          end
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_if", :if)
+  end
+
+  def test_unless
+    expected = [
+      <<~RUBY,
+        def uses_unless
+          if true
+            if false
+              return
+            end
+          end
+        end
+      RUBY
+      <<~RUBY,
+        def uses_unless
+          unless true
+            unless false
+              return
+            end
+          end
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_unless", :if)
+  end
+
+  def test_modifier_if_in_many_things
+    expected = [
+      <<~RUBY,
+        def uses_many_things
+          i = 1
+          while i < 10
+            i += 1
+            until some_func
+              some_other_func
+            end
+            return true unless "hi there" == "changeling"
+            return false
+          end
+          i
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_many_things", :if)
+  end
+
+  def test_block_if_with_else
+    mutants = inline_mutants("def m(a)\n  if a\n    1\n  else\n    2\n  end\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  unless a\n    1\n  else\n    2\n  end\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  if a\n    2\n  else\n    1\n  end\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_block_if_without_else
+    mutants = inline_mutants("def m(a)\n  if a\n    1\n  end\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  unless a\n    1\n  end\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  if a\n    nil\n  else\n    1\n  end\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_modifier_if
+    mutants = inline_mutants("def m(a)\n  1 if a\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  1 unless a\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  a ? nil : 1\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_block_unless_with_else
+    mutants = inline_mutants("def m(a)\n  unless a\n    1\n  else\n    2\n  end\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  if a\n    1\n  else\n    2\n  end\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  unless a\n    2\n  else\n    1\n  end\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_block_unless_without_else
+    mutants = inline_mutants("def m(a)\n  unless a\n    1\n  end\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  if a\n    1\n  end\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  unless a\n    nil\n  else\n    1\n  end\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_modifier_unless
+    mutants = inline_mutants("def m(a)\n  1 unless a\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  1 if a\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  a ? 1 : nil\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_elsif_chain_negates_each_predicate
+    source = "def m(a, b)\n  if a\n    1\n  elsif b\n    2\n  else\n    3\n  end\nend\n"
+    mutants = inline_mutants(source, :if)
+
+    assert_mutants ["def m(a, b)\n  if !(a)\n    1\n  elsif b\n    2\n  else\n    3\n  end\nend\n",
+                    "def m(a, b)\n  if a\n    1\n  elsif !(b)\n    2\n  else\n    3\n  end\nend\n"],
+                   mutants
+    assert_same_behavior "def m(a, b)\n  a ? (b ? 2 : 3) : 1\nend\n", mutants[0], :m, TRUTH_PAIRS
+    assert_same_behavior "def m(a, b)\n  a ? 1 : (b ? 3 : 2)\nend\n", mutants[1], :m, TRUTH_PAIRS
+  end
+
+  def test_ternary
+    mutants = inline_mutants("def m(a)\n  a ? 1 : 2\nend\n", :if)
+
+    assert_mutants ["def m(a)\n  !(a) ? 1 : 2\nend\n"], mutants
+    assert_same_behavior "def m(a)\n  a ? 2 : 1\nend\n", mutants.first, :m, TRUTHS
+  end
+
+  def test_low_precedence_predicates_are_negated_whole
+    source = "def m(a, b)\n  if a and b\n    1\n  elsif not a or b\n    2\n  end\nend\n"
+    mutants = inline_mutants(source, :if)
+
+    assert_mutants ["def m(a, b)\n  if !(a and b)\n    1\n  elsif not a or b\n    2\n  end\nend\n",
+                    "def m(a, b)\n  if a and b\n    1\n  elsif !(not a or b)\n    2\n  end\nend\n"],
+                   mutants
+    assert_same_behavior "def m(a, b)\n  (a && b) ? ((!a || b) ? 2 : nil) : 1\nend\n", mutants[0], :m, TRUTH_PAIRS
+    assert_same_behavior "def m(a, b)\n  (a && b) ? 1 : ((!a || b) ? nil : 2)\nend\n", mutants[1], :m, TRUTH_PAIRS
+  end
+
+  def test_low_precedence_predicate_keyword_swap
+    mutants = inline_mutants("def m(a, b)\n  1 if a or not b\nend\n", :if)
+
+    assert_mutants ["def m(a, b)\n  1 unless a or not b\nend\n"], mutants
+    assert_same_behavior "def m(a, b)\n  (a || !b) ? nil : 1\nend\n", mutants.first, :m, TRUTH_PAIRS
+  end
+
+  def test_if_nested_in_elsif_body
+    source = "def m(a, b, c)\n  if a\n    1\n  elsif b\n    if c\n      2\n    else\n      3\n    end\n  end\nend\n"
+    mutants = inline_mutants(source, :if)
+
+    assert_mutants ["def m(a, b, c)\n  if !(a)\n    1\n  elsif b\n    if c\n      2\n    else\n      3\n    end\n  end\nend\n",
+                    "def m(a, b, c)\n  if a\n    1\n  elsif !(b)\n    if c\n      2\n    else\n      3\n    end\n  end\nend\n",
+                    "def m(a, b, c)\n  if a\n    1\n  elsif b\n    unless c\n      2\n    else\n      3\n    end\n  end\nend\n"],
+                   mutants
+    triples = [true, false].product([true, false], [true, false])
+    assert_same_behavior "def m(a, b, c)\n  a ? (b ? (c ? 2 : 3) : nil) : 1\nend\n", mutants[0], :m, triples
+    assert_same_behavior "def m(a, b, c)\n  a ? 1 : (b ? nil : (c ? 2 : 3))\nend\n", mutants[1], :m, triples
+    assert_same_behavior "def m(a, b, c)\n  a ? 1 : (b ? (c ? 3 : 2) : nil)\nend\n", mutants[2], :m, triples
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
