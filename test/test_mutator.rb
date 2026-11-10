@@ -835,6 +835,100 @@ class TestMutator < Minitest::Test
     assert_empty inline_mutants(source, :call)
   end
 
+  ASGN_KINDS = [:lasgn, :iasgn, :gasgn, :cvasgn]
+
+  def test_lasgn
+    expected = [
+      <<~RUBY,
+        def uses_lasgn
+          lvar = nil
+          lvar = nil
+        end
+      RUBY
+      <<~RUBY,
+        def uses_lasgn
+          lvar = 5
+          lvar = 42
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_lasgn", :lasgn)
+  end
+
+  def test_operator_writes_are_assignments
+    expected = [
+      <<~RUBY,
+        def uses_numeric_literals
+          i = nil
+          i += 2147483648
+          i -= 3.5
+        end
+      RUBY
+      <<~RUBY,
+        def uses_numeric_literals
+          i = 1
+          i += nil
+          i -= 3.5
+        end
+      RUBY
+      <<~RUBY,
+        def uses_numeric_literals
+          i = 1
+          i += 2147483648
+          i -= nil
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_numeric_literals", [:lasgn])
+  end
+
+  def test_lasgn_compound_forms
+    source = "def m(a)\n  a += 1\n  a ||= 2\n  a &&= nil\nend\n"
+
+    assert_mutants ["def m(a)\n  a += nil\n  a ||= 2\n  a &&= nil\nend\n",
+                    "def m(a)\n  a += 1\n  a ||= nil\n  a &&= nil\nend\n",
+                    "def m(a)\n  a += 1\n  a ||= 2\n  a &&= 42\nend\n"],
+                   inline_mutants(source, :lasgn)
+  end
+
+  def test_constant_write_is_not_an_assignment
+    source = "def m\n  self.class::X += 1\n  self.class::Y ||= 2\nend\n"
+
+    assert Prism.parse(source).success?
+    assert_empty inline_mutants(source, ASGN_KINDS)
+  end
+
+  def test_assignment_of_a_call_mutates_both
+    source = "def m\n  x = foo(bar)\nend\n"
+
+    assert_mutants ["def m\n  x = nil\nend\n",
+                    "def m\n  x = nil\nend\n",
+                    "def m\n  x = foo(nil)\nend\n"],
+                   inline_mutants(source, [:lasgn, :call])
+    assert_equal [:lasgn, :call, :call], mutation_kinds(source)
+  end
+
+  def test_assignment_of_a_heredoc_is_dropped
+    source = <<~'SOURCE'
+      def m
+        x = <<~X
+          a #{bar}
+        X
+      end
+    SOURCE
+    expected = <<~'RUBY'
+      def m
+        x = <<~X
+          a #{nil}
+        X
+      end
+    RUBY
+
+    assert_mutants [expected], inline_mutants(source, [:lasgn, :call])
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)

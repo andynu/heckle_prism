@@ -12,14 +12,17 @@ class Heckle
       @randomizer = randomizer
     end
 
-    # Returns the mutations sorted by [start_offset, -end_offset].
+    # Returns the mutations sorted by [start_offset, -end_offset]. Equal spans
+    # (an assignment's value that is itself a call) keep visit order, outer first.
     def mutations_for(def_node)
       @mutations = []
       @heredoc_openings = []
       def_node.accept(self)
       @mutations
         .reject { |mutation| strands_heredoc?(mutation) }
-        .sort_by { |mutation| [mutation.start_offset, -mutation.end_offset] }
+        .each_with_index
+        .sort_by { |mutation, index| [mutation.start_offset, -mutation.end_offset, index] }
+        .map(&:first)
     end
 
     # Parameters are not mutated; only the body is visited.
@@ -97,6 +100,26 @@ class Heckle
       super
     end
 
+    def visit_local_variable_write_node(node)
+      assignment(:lasgn, node)
+      super
+    end
+
+    def visit_local_variable_operator_write_node(node)
+      assignment(:lasgn, node)
+      super
+    end
+
+    def visit_local_variable_or_write_node(node)
+      assignment(:lasgn, node)
+      super
+    end
+
+    def visit_local_variable_and_write_node(node)
+      assignment(:lasgn, node)
+      super
+    end
+
     # A range of two integer literals is one site; its ends are not mutated
     # separately. Any other range is descended into. Always inclusive.
     def visit_range_node(node)
@@ -160,6 +183,11 @@ class Heckle
     # cannot rebind it (`-3 ** 2` is -9).
     def number(value)
       value.negative? ? "(#{value})" : value.to_s
+    end
+
+    def assignment(kind, node)
+      value = node.value
+      replace(kind, value.location, value.is_a?(Prism::NilNode) ? "42" : "nil")
     end
 
     def note_heredoc(node)
