@@ -664,6 +664,177 @@ class TestMutator < Minitest::Test
     assert_same_behavior "def m(a, b, c)\n  a ? 1 : (b ? (c ? 3 : 2) : nil)\nend\n", mutants[2], :m, triples
   end
 
+  def test_call
+    expected = [
+      <<~RUBY,
+        def uses_call
+          nil
+        end
+      RUBY
+      <<~RUBY,
+        def uses_call
+          nil + some_other_func
+        end
+      RUBY
+      <<~RUBY,
+        def uses_call
+          some_func + nil
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_call", :call)
+  end
+
+  def test_call_with_block_is_not_a_call
+    expected = [
+      <<~RUBY,
+        def uses_callblock
+          nil.y { 1 }
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_callblock", [:call])
+  end
+
+  def test_callblock
+    expected = [
+      <<~RUBY,
+        def uses_callblock
+          nil
+        end
+      RUBY
+      <<~RUBY,
+        def uses_callblock
+          nil.y { 1 }
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_callblock", [:call, :iter])
+  end
+
+  def test_iter
+    expected = [
+      <<~RUBY,
+        def uses_iter
+          x = [ 1, 2, 3 ]
+          nil
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_iter", [:call, :iter])
+  end
+
+  def mutation_kinds(source)
+    def_node = Prism.parse(source).value.statements.body.first
+    Heckle::Mutator.new(STUB).mutations_for(def_node).map(&:kind)
+  end
+
+  def test_block_pass_argument_is_a_call
+    source = "def m(blk)\n  foo(&blk)\nend\n"
+
+    assert_mutants ["def m(blk)\n  nil\nend\n"], inline_mutants(source, [:call, :iter])
+    assert_equal [:call], mutation_kinds(source)
+  end
+
+  def test_do_block_is_an_iter_and_its_body_is_visited
+    source = "def m\n  foo do\n    bar\n  end\nend\n"
+
+    assert_mutants ["def m\n  nil\nend\n", "def m\n  foo do\n    nil\n  end\nend\n"],
+                   inline_mutants(source, [:call, :iter])
+    assert_equal [:iter, :call], mutation_kinds(source)
+  end
+
+  def test_lambda_is_not_mutated_but_its_body_is
+    assert_mutants ["def m\n  -> { nil }\nend\n"],
+                   inline_mutants("def m\n  -> { foo }\nend\n", [:call, :iter])
+  end
+
+  def test_super_and_yield_are_not_mutated_but_their_arguments_are
+    source = "def m\n  super(foo)\n  super\n  yield bar\nend\n"
+
+    assert_mutants ["def m\n  super(nil)\n  super\n  yield bar\nend\n",
+                    "def m\n  super(foo)\n  super\n  yield nil\nend\n"],
+                   inline_mutants(source, [:call, :iter])
+  end
+
+  def test_super_with_block_is_not_an_iter
+    assert_mutants ["def m\n  super { nil }\nend\n"],
+                   inline_mutants("def m\n  super { foo }\nend\n", [:call, :iter])
+  end
+
+  def test_attribute_write
+    mutants = inline_mutants("def m\n  self.foo = 1\nend\n", :call)
+
+    assert_mutants ["def m\n  nil\nend\n"], mutants
+  end
+
+  def test_index_call
+    mutants = inline_mutants("def m(a)\n  a[0]\nend\n", :call)
+
+    assert_mutants ["def m(a)\n  nil\nend\n"], mutants
+    assert_nil call_mutant(mutants.first, :m, [1])
+  end
+
+  def test_operator_call
+    assert_mutants ["def m(x)\n  nil\nend\n"], inline_mutants("def m(x)\n  !x\nend\n", :call)
+  end
+
+  def test_safe_navigation_call
+    assert_mutants ["def m(a)\n  nil\nend\n"], inline_mutants("def m(a)\n  a&.b\nend\n", :call)
+  end
+
+  def test_call_inside_interpolation
+    assert_mutants ["def m\n  \"s\#{nil}\"\nend\n"],
+                   inline_mutants("def m\n  \"s\#{foo}\"\nend\n", :call)
+  end
+
+  def test_command_call_without_parentheses
+    source = "def m\n  foo bar, baz\nend\n"
+
+    assert_mutants ["def m\n  nil\nend\n",
+                    "def m\n  foo nil, baz\nend\n",
+                    "def m\n  foo bar, nil\nend\n"],
+                   inline_mutants(source, :call)
+  end
+
+  def test_mutation_containing_a_heredoc_opening_is_dropped
+    source = <<~'SOURCE'
+      def m
+        foo(<<~X, baz)
+          a #{bar}
+        X
+      end
+    SOURCE
+    expected = [
+      <<~'RUBY',
+        def m
+          foo(<<~X, nil)
+            a #{bar}
+          X
+        end
+      RUBY
+      <<~'RUBY',
+        def m
+          foo(<<~X, baz)
+            a #{nil}
+          X
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, inline_mutants(source, :call)
+  end
+
+  def test_heredoc_receiver_drops_the_call
+    source = "def m\n  <<~X.strip\n    a\n  X\nend\n"
+
+    assert_empty inline_mutants(source, :call)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)

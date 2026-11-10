@@ -15,8 +15,11 @@ class Heckle
     # Returns the mutations sorted by [start_offset, -end_offset].
     def mutations_for(def_node)
       @mutations = []
+      @heredoc_openings = []
       def_node.accept(self)
-      @mutations.sort_by { |mutation| [mutation.start_offset, -mutation.end_offset] }
+      @mutations
+        .reject { |mutation| strands_heredoc?(mutation) }
+        .sort_by { |mutation| [mutation.start_offset, -mutation.end_offset] }
     end
 
     # Parameters are not mutated; only the body is visited.
@@ -115,14 +118,33 @@ class Heckle
     # Interpolated parts and %w[] elements have no opening. A heredoc's body
     # lies outside its node's span, so replacing the node would strand it.
     def visit_string_node(node)
-      opening = node.opening_loc&.slice
-      if opening && !opening.start_with?("<<")
+      note_heredoc(node)
+      if node.opening_loc && !node.heredoc?
         replace(:str, node.location, @randomizer.rand_string.inspect)
       end
       super
     end
 
+    def visit_interpolated_string_node(node)
+      note_heredoc(node)
+      super
+    end
+
     def visit_x_string_node(node)
+      note_heredoc(node)
+    end
+
+    def visit_interpolated_x_string_node(node)
+      note_heredoc(node)
+      super
+    end
+
+    # A literal block makes the call an :iter. A block-pass (`&blk`) is an
+    # argument, so that call stays a :call.
+    def visit_call_node(node)
+      kind = node.block.is_a?(Prism::BlockNode) ? :iter : :call
+      replace(kind, node.location, "nil")
+      super
     end
 
     # The numeric part of 2r or 3i is not a mutation site of its own.
@@ -138,6 +160,18 @@ class Heckle
     # cannot rebind it (`-3 ** 2` is -9).
     def number(value)
       value.negative? ? "(#{value})" : value.to_s
+    end
+
+    def note_heredoc(node)
+      @heredoc_openings << node.opening_loc.start_offset if node.heredoc?
+    end
+
+    # A heredoc's body lies outside its opening's span, so replacing a range
+    # that holds the opening would leave the body behind as stray code.
+    def strands_heredoc?(mutation)
+      @heredoc_openings.any? do |offset|
+        offset >= mutation.start_offset && offset < mutation.end_offset
+      end
     end
 
     def replace(kind, location, replacement)
