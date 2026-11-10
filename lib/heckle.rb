@@ -315,7 +315,7 @@ class Heckle
   end
 
   ##
-  # Returns a random Fixnum.
+  # Returns a random nonzero Integer from -100 to 100.
 
   def rand_number
     (rand(100) + 1)*((-1)**rand(2))

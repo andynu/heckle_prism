@@ -1,17 +1,11 @@
-.autotest
 History.txt
 Manifest.txt
 README.txt
 Rakefile
 bin/heckle
-lib/autotest/heckle.rb
 lib/heckle.rb
 lib/heckle_runner.rb
 lib/minitest_heckler.rb
-lib/test_unit_heckler.rb
-sample/Rakefile
-sample/changes.log
-sample/test/test_heckled.rb
 test/fixtures/heckle_dummy.rb
 test/fixtures/heckled.rb
 test/fixtures/minitest_project/README.txt
