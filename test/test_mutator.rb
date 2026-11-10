@@ -1013,6 +1013,150 @@ class TestMutator < Minitest::Test
                    inline_mutants(source, :cvasgn)
   end
 
+  def test_masgn
+    expected = [
+      <<~RUBY,
+        def uses_masgn
+          @_heckle_dummy, $b, c = 5, 6, 7
+        end
+      RUBY
+      <<~RUBY,
+        def uses_masgn
+          @a, $_heckle_dummy, c = 5, 6, 7
+        end
+      RUBY
+      <<~RUBY,
+        def uses_masgn
+          @a, $b, _heckle_dummy = 5, 6, 7
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_masgn", [:iasgn, :gasgn, :lasgn])
+  end
+
+  def test_iter_assignment_and_block_parameter
+    expected = [
+      <<~RUBY,
+        def uses_iter
+          x = nil
+          x.each { |y| y }
+        end
+      RUBY
+      <<~RUBY,
+        def uses_iter
+          x = [ 1, 2, 3 ]
+          x.each { |_heckle_dummy| y }
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_iter", [:lasgn])
+  end
+
+  def test_class_variable_target
+    assert_mutants ["def m(l)\n  @@_heckle_dummy, b = l\nend\n"],
+                   inline_mutants("def m(l)\n  @@a, b = l\nend\n", :cvasgn)
+  end
+
+  def test_splat_target
+    assert_mutants ["def m(l)\n  _heckle_dummy, *b = l\nend\n",
+                    "def m(l)\n  a, *_heckle_dummy = l\nend\n"],
+                   inline_mutants("def m(l)\n  a, *b = l\nend\n", :lasgn)
+  end
+
+  def test_nested_target
+    assert_mutants ["def m(l)\n  _heckle_dummy, (b, c) = l\nend\n",
+                    "def m(l)\n  a, (_heckle_dummy, c) = l\nend\n",
+                    "def m(l)\n  a, (b, _heckle_dummy) = l\nend\n"],
+                   inline_mutants("def m(l)\n  a, (b, c) = l\nend\n", :lasgn)
+  end
+
+  def test_for_target
+    source = "def m(l)\n  for x in l\n    x\n  end\n  for a, @b in l\n  end\nend\n"
+
+    assert_mutants ["def m(l)\n  for _heckle_dummy in l\n    x\n  end\n  for a, @b in l\n  end\nend\n",
+                    "def m(l)\n  for x in l\n    x\n  end\n  for _heckle_dummy, @b in l\n  end\nend\n",
+                    "def m(l)\n  for x in l\n    x\n  end\n  for a, @_heckle_dummy in l\n  end\nend\n"],
+                   inline_mutants(source, ASGN_KINDS)
+  end
+
+  def test_rescue_target
+    source = "def m\n  begin\n    foo\n  rescue => e\n    e\n  end\nend\n"
+
+    assert_mutants ["def m\n  begin\n    foo\n  rescue => _heckle_dummy\n    e\n  end\nend\n"],
+                   inline_mutants(source, :lasgn)
+  end
+
+  def test_lambda_parameter
+    assert_mutants ["def m\n  ->(_heckle_dummy) { a }\nend\n"],
+                   inline_mutants("def m\n  ->(a) { a }\nend\n", :lasgn)
+  end
+
+  # Only parameters directly in the list are renamed; the parts of a
+  # destructuring parameter are not.
+  def test_destructuring_block_parameter_is_not_renamed
+    assert_mutants ["def m\n  f { |(a, b), _heckle_dummy| }\nend\n"],
+                   inline_mutants("def m\n  f { |(a, b), c| }\nend\n", :lasgn)
+  end
+
+  def test_required_parameter_after_rest_is_renamed
+    assert_mutants ["def m\n  f { |*r, _heckle_dummy| }\nend\n"],
+                   inline_mutants("def m\n  f { |*r, z| }\nend\n", :lasgn)
+  end
+
+  def test_numbered_and_it_parameters_are_not_mutated
+    assert_empty inline_mutants("def m\n  f { _1 }\n  g { it }\nend\n", ASGN_KINDS)
+  end
+
+  def test_def_parameters_are_not_mutated
+    assert_empty inline_mutants("def m(a, (b, c), d = nil, *e, f:, g: nil, **h, &i)\nend\n", ASGN_KINDS)
+  end
+
+  def test_optional_and_keyword_block_parameters_are_not_mutated
+    assert_empty inline_mutants("def m\n  f { |a = nil, k:, j: nil, &blk; loc| }\nend\n", ASGN_KINDS)
+  end
+
+  def test_pattern_captures_and_named_groups_are_not_targets
+    source = "def m(v, s)\n  case v\n  in [a, *b] then a\n  in {k:} then k\n  in Integer => d then d\n  end\n  /(?<g>.)/ =~ s\nend\n"
+
+    assert Prism.parse(source).success?
+    assert_empty inline_mutants(source, ASGN_KINDS)
+  end
+
+  def test_many_things_full_list
+    def_node = Heckle::MethodFinder.new(fixture_source).find("HeckleDummy", "uses_many_things").def_node
+    mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
+    triples = mutations.map do |mutation|
+      text = fixture_source.byteslice(mutation.start_offset, mutation.end_offset - mutation.start_offset)
+      [mutation.kind, text, mutation.replacement]
+    end
+    expected = [
+      [:lasgn, "1", "nil"],
+      [:lit, "1", "6"],
+      [:while, "while", "until"],
+      [:call, "i < 10", "nil"],
+      [:lit, "10", "15"],
+      [:lasgn, "1", "nil"],
+      [:lit, "1", "6"],
+      [:until, "until", "while"],
+      [:call, "some_func", "nil"],
+      [:call, "some_other_func", "nil"],
+      [:true, "true", "false"],
+      [:if, "if", "unless"],
+      [:call, "\"hi there\" == \"changeling\"", "nil"],
+      [:str, "\"hi there\"", "\"l33t h4x0r\""],
+      [:str, "\"changeling\"", "\"l33t h4x0r\""],
+      [:false, "false", "true"],
+    ]
+
+    assert_equal expected, triples
+    mutations.each do |mutation|
+      mutant = mutation.apply(def_node.slice, def_node.location.start_offset)
+      assert Prism.parse(mutant).success?, "mutant does not parse:\n#{mutant}"
+    end
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)

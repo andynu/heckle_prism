@@ -180,6 +180,34 @@ class Heckle
       super
     end
 
+    # Targets are renamed only in these three contexts. Pattern captures and
+    # regex named groups are left alone: renaming `k` in `in {k:}` would
+    # change the key matched, not the binding.
+    def visit_multi_write_node(node)
+      rename_targets(node)
+      super
+    end
+
+    def visit_for_node(node)
+      rename_targets(node.index)
+      super
+    end
+
+    def visit_rescue_node(node)
+      rename_targets(node.reference) if node.reference
+      super
+    end
+
+    # Reached only through a block's or lambda's parameters, since def
+    # parameters are not visited. The parts of a destructuring parameter
+    # `|(a, b)|` are not directly in the list and are not renamed.
+    def visit_parameters_node(node)
+      (node.requireds + node.posts).grep(Prism::RequiredParameterNode).each do |param|
+        replace(:lasgn, param.location, "_heckle_dummy")
+      end
+      super
+    end
+
     # A range of two integer literals is one site; its ends are not mutated
     # separately. Any other range is descended into. Always inclusive.
     def visit_range_node(node)
@@ -248,6 +276,26 @@ class Heckle
     def assignment(kind, node)
       value = node.value
       replace(kind, value.location, value.is_a?(Prism::NilNode) ? "42" : "nil")
+    end
+
+    TARGETS = {
+      Prism::LocalVariableTargetNode => [:lasgn, "_heckle_dummy"],
+      Prism::InstanceVariableTargetNode => [:iasgn, "@_heckle_dummy"],
+      Prism::GlobalVariableTargetNode => [:gasgn, "$_heckle_dummy"],
+      Prism::ClassVariableTargetNode => [:cvasgn, "@@_heckle_dummy"],
+    }.freeze
+
+    # Attribute, index and constant targets are not renamed.
+    def rename_targets(node)
+      case node
+      when Prism::MultiWriteNode, Prism::MultiTargetNode
+        (node.lefts + [node.rest] + node.rights).each { |target| rename_targets(target) }
+      when Prism::SplatNode
+        rename_targets(node.expression)
+      else
+        kind, name = TARGETS[node.class]
+        replace(kind, node.location, name) if kind
+      end
     end
 
     def note_heredoc(node)
