@@ -57,6 +57,14 @@ class Heckle
       super
     end
 
+    # Regexp#inspect of an escaped pattern is valid source for any string:
+    # it escapes `/`, `#` and control characters. The flags are kept.
+    def visit_regular_expression_node(node)
+      pattern = Regexp.new(Regexp.escape(@randomizer.rand_string)).inspect
+      replace(:lit, node.location, pattern + node.closing_loc.slice[1..])
+      super
+    end
+
     # Method names here are not values.
     def visit_alias_method_node(node)
     end

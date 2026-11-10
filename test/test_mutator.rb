@@ -335,6 +335,57 @@ class TestMutator < Minitest::Test
     assert_empty inline_mutants(source, :lit)
   end
 
+  def test_regexes
+    expected = [
+      <<~'RUBY',
+        def uses_regexes
+          i = /l33t\ h4x0r/
+          i = /c{2,4}+/
+          i = /123/
+        end
+      RUBY
+      <<~'RUBY',
+        def uses_regexes
+          i = /a.*/
+          i = /l33t\ h4x0r/
+          i = /123/
+        end
+      RUBY
+      <<~'RUBY',
+        def uses_regexes
+          i = /a.*/
+          i = /c{2,4}+/
+          i = /l33t\ h4x0r/
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_regexes", :lit)
+  end
+
+  def test_hostile_random_string_regex_matches_literally
+    randomizer = Randomizer.new(5, HOSTILE, :"l33t h4x0r", 5..10)
+    mutants = inline_mutants("def m\n  /x/\nend\n", :lit, randomizer)
+
+    assert_equal 1, mutants.size
+    assert Prism.parse(mutants.first).success?
+    assert_equal HOSTILE, call_mutant(mutants.first, :m).match(HOSTILE)[0]
+  end
+
+  def test_regex_flags_are_kept
+    source = "def m\n  [/ab/im, %r{c}x]\nend\n"
+    mutants = inline_mutants(source, :lit)
+
+    assert_mutants ["def m\n  [/l33t\\ h4x0r/im, %r{c}x]\nend\n",
+                    "def m\n  [/ab/im, /l33t\\ h4x0r/x]\nend\n"],
+                   mutants
+    assert_equal Regexp::IGNORECASE | Regexp::MULTILINE, call_mutant(mutants.first, :m).first.options
+  end
+
+  def test_interpolated_regex_is_not_mutated
+    assert_empty inline_mutants("def m(b)\n  /a\#{b}c/\nend\n", [:lit, :str])
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
