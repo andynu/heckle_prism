@@ -1,6 +1,7 @@
 require "prism"
 require "timeout"
 require "tempfile"
+require "minitest"
 require "heckle/method_finder"
 require "heckle/mutation"
 require "heckle/mutator"
@@ -11,6 +12,10 @@ require "heckle/mutator"
 class Heckle
 
   class Timeout < ::Timeout::Error; end
+
+  # Minitest records any other exception as a test error, which would spend
+  # the timeout on one test and let the next one loop forever.
+  Minitest::Test::PASSTHROUGH_EXCEPTIONS << Timeout
 
   ##
   # Raised when the method to heckle, or its source, cannot be found.
@@ -109,6 +114,16 @@ class Heckle
   end
 
   ##
+  # Loads the test files at +paths+. A <tt>require "minitest/autorun"</tt>
+  # in them does not schedule a run at exit: Heckle runs the suite itself.
+
+  def self.load_tests(paths)
+    # Minitest.autorun installs its at_exit hook only while this is false.
+    Minitest.class_variable_set(:@@installed_at_exit, true)
+    paths.each { |path| require File.expand_path(path) }
+  end
+
+  ##
   # Creates a new Heckle that will heckle +klass_name+ and +method_name+,
   # sending results to +reporter+. +method_name+ is "foo" for an instance
   # method and "self.foo" for a class method.
@@ -186,10 +201,33 @@ class Heckle
   end
 
   ##
-  # Overwrite test_pass? for your own Heckle runner.
+  # Runs every loaded Minitest runnable in-process and returns true when all
+  # passed (skips count as passing). Silent unless Heckle.debug. Override
+  # for another test framework.
 
   def tests_pass?
-    raise NotImplementedError
+    Minitest.seed ||= Random.new_seed % 0xFFFF
+    options = { seed: Minitest.seed, args: "--seed #{Minitest.seed}" }
+
+    quietly do
+      reporter = Minitest::CompositeReporter.new
+      if @@debug
+        reporter << Minitest::SummaryReporter.new($stdout, options)
+        reporter << Minitest::ProgressReporter.new($stdout, options)
+      else
+        reporter << Minitest::StatisticsReporter.new(nil, options)
+      end
+
+      # The same sequence as Minitest.run, without argument parsing or plugins.
+      executor = Minitest.parallel_executor
+      executor.start if executor.respond_to?(:start)
+      reporter.start
+      Minitest.run_all_suites(reporter, options)
+      executor.shutdown if executor.respond_to?(:shutdown)
+      reporter.report
+
+      reporter.passed?
+    end
   end
 
   def run_tests
@@ -365,6 +403,18 @@ class Heckle
 
   def def_node
     @found.def_node
+  end
+
+  def quietly
+    return yield if @@debug
+
+    stdout, stderr = $stdout, $stderr
+    File.open(NULL_PATH, "w") do |null|
+      $stdout = $stderr = null
+      yield
+    ensure
+      $stdout, $stderr = stdout, stderr
+    end
   end
 
   def not_found(reason)

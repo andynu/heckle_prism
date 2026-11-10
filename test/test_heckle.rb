@@ -229,10 +229,6 @@ class TestHeckle < Minitest::Test
     Heckle.class_variable_set(:@@guess_timeout, saved[1])
   end
 
-  def test_tests_pass_is_abstract
-    assert_raises(NotImplementedError) { Heckle.new("HeckleSubjects", "answer").tests_pass? }
-  end
-
   def test_validate_without_mutations
     reporter = RecordingReporter.new
     heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk "no run expected" }
@@ -319,8 +315,8 @@ class TestHeckle < Minitest::Test
     assert_equal 42, HeckleSubjects.new.answer
   end
 
-  def test_unimplemented_tests_pass_restores
-    heckler = TestHeckler.new("HeckleSubjects", "answer", [:lit], RecordingReporter.new)
+  def test_script_error_in_tests_propagates_and_restores
+    heckler = scripted("HeckleSubjects", "answer", [:lit]) { raise NotImplementedError }
 
     assert_raises(NotImplementedError) { heckler.validate }
     assert_equal 42, HeckleSubjects.new.answer

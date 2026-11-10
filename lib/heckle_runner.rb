@@ -1,6 +1,5 @@
 require 'optparse'
 require 'heckle'
-require 'minitest_heckler'
 
 class HeckleRunner
   def self.run argv=ARGV
@@ -96,11 +95,6 @@ class HeckleRunner
     options
   end
 
-  # TODO: this sucks
-  def heckler
-    MiniTestHeckler
-  end
-
   def initialize class_or_module, method, options={}
     @class_or_module = class_or_module
     @method = method
@@ -108,6 +102,7 @@ class HeckleRunner
   end
 
   def run
-    heckler.new(@class_or_module, @method, @options).validate
+    Heckle.load_tests(Dir.glob(@options[:test_pattern]))
+    Heckle.new(@class_or_module, @method, @options[:nodes]).validate
   end
 end

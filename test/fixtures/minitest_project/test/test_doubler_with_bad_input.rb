@@ -1,7 +1,7 @@
 require "minitest/autorun"
 require "doubler"
 
-class TestDoublerWithBadInput < MiniTest::Unit::TestCase
+class TestDoublerWithBadInput < Minitest::Test
   def setup
     @doubler = Doubler.new
   end
