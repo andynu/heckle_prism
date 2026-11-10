@@ -26,6 +26,14 @@ class TestHeckleRunner < Minitest::Test
     out
   end
 
+  def test_bin_is_tracked_executable
+    root = File.expand_path("..", __dir__)
+    out, _, status = Open3.capture3("git", "ls-files", "-s", "bin/heckle", chdir: root)
+
+    assert status.success?
+    assert_match(/\A100755 /, out)
+  end
+
   def test_full_coverage
     out, err, status = heckle("Doubler", "double")
 
