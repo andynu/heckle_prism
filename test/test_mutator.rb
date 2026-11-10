@@ -985,6 +985,34 @@ class TestMutator < Minitest::Test
                    inline_mutants(source, :gasgn)
   end
 
+  def test_cvasgn
+    expected = [
+      <<~RUBY,
+        def uses_cvasgn
+          @@cvar = nil
+          @@cvar = nil
+        end
+      RUBY
+      <<~RUBY,
+        def uses_cvasgn
+          @@cvar = 5
+          @@cvar = 42
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_cvasgn", :cvasgn)
+  end
+
+  def test_cvasgn_compound_forms
+    source = "def m\n  @@a += 1\n  @@a ||= 2\n  @@a &&= nil\nend\n"
+
+    assert_mutants ["def m\n  @@a += nil\n  @@a ||= 2\n  @@a &&= nil\nend\n",
+                    "def m\n  @@a += 1\n  @@a ||= nil\n  @@a &&= nil\nend\n",
+                    "def m\n  @@a += 1\n  @@a ||= 2\n  @@a &&= 42\nend\n"],
+                   inline_mutants(source, :cvasgn)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
