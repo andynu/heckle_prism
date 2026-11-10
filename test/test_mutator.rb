@@ -188,6 +188,95 @@ class TestMutator < Minitest::Test
     assert_empty inline_mutants("def m\n  [2r, 3i, 1.5r]\nend\n", :lit)
   end
 
+  HOSTILE = "#{(0..125).map(&:chr).join}\#{\""
+
+  def test_strings
+    expected = [
+      <<~RUBY,
+        def uses_strings
+          @names << "l33t h4x0r"
+          @names << "Hello, Jeff"
+          @names << "Hi, Frank"
+        end
+      RUBY
+      <<~RUBY,
+        def uses_strings
+          @names << "Hello, Robert"
+          @names << "l33t h4x0r"
+          @names << "Hi, Frank"
+        end
+      RUBY
+      <<~RUBY,
+        def uses_strings
+          @names << "Hello, Robert"
+          @names << "Hello, Jeff"
+          @names << "l33t h4x0r"
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_strings", :str)
+  end
+
+  def test_other_string_literal_forms
+    source = "def m\n  ['y', %q(x), ?a]\nend\n"
+
+    assert_mutants ["def m\n  [\"l33t h4x0r\", %q(x), ?a]\nend\n",
+                    "def m\n  ['y', \"l33t h4x0r\", ?a]\nend\n",
+                    "def m\n  ['y', %q(x), \"l33t h4x0r\"]\nend\n"],
+                   inline_mutants(source, :str)
+  end
+
+  def test_adjacent_literals_mutate_separately
+    source = "def m\n  \"a\" \"b\"\nend\n"
+
+    assert_mutants ["def m\n  \"l33t h4x0r\" \"b\"\nend\n",
+                    "def m\n  \"a\" \"l33t h4x0r\"\nend\n"],
+                   inline_mutants(source, :str)
+  end
+
+  def test_interpolated_string_parts_are_not_mutated
+    assert_empty inline_mutants("def m(t)\n  \"s\#{t}u\"\nend\n", :str)
+  end
+
+  def test_word_array_elements_are_not_mutated
+    assert_empty inline_mutants("def m\n  %w[p q]\nend\n", :str)
+  end
+
+  def test_heredocs_are_not_mutated
+    source = <<~'SOURCE'
+      def m(t)
+        [<<A, <<-B, <<~C, <<~D, <<~'E']
+      plain
+      A
+        dash
+        B
+        squiggly
+        C
+        interpolated #{t}
+        D
+        quoted #{t}
+        E
+      end
+    SOURCE
+
+    assert Prism.parse(source).success?
+    assert_empty inline_mutants(source, :str)
+  end
+
+  def test_backtick_strings_are_not_mutated
+    assert_empty inline_mutants("def m\n  `ls`\nend\n", :str)
+  end
+
+  def test_hostile_random_string_is_quoted_safely
+    randomizer = Randomizer.new(5, HOSTILE, :"l33t h4x0r", 5..10)
+    mutants = inline_mutants("def m\n  \"x\"\nend\n", :str, randomizer)
+
+    assert_equal 1, mutants.size
+    assert Prism.parse(mutants.first).success?
+    assert_equal HOSTILE, call_mutant(mutants.first, :m)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)

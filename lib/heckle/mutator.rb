@@ -45,6 +45,19 @@ class Heckle
       super
     end
 
+    # Interpolated parts and %w[] elements have no opening. A heredoc's body
+    # lies outside its node's span, so replacing the node would strand it.
+    def visit_string_node(node)
+      opening = node.opening_loc&.slice
+      if opening && !opening.start_with?("<<")
+        replace(:str, node.location, @randomizer.rand_string.inspect)
+      end
+      super
+    end
+
+    def visit_x_string_node(node)
+    end
+
     # The numeric part of 2r or 3i is not a mutation site of its own.
     def visit_rational_node(node)
     end
