@@ -45,6 +45,25 @@ class Heckle
       super
     end
 
+    # A label key (`foo:` or `"foo":`) stays a label. %i[] elements have
+    # neither opening nor closing.
+    def visit_symbol_node(node)
+      closing = node.closing_loc&.slice
+      if closing&.end_with?(":")
+        replace(:lit, node.location, "#{@randomizer.rand_symbol.to_s.inspect}:")
+      elsif node.opening_loc
+        replace(:lit, node.location, @randomizer.rand_symbol.inspect)
+      end
+      super
+    end
+
+    # Method names here are not values.
+    def visit_alias_method_node(node)
+    end
+
+    def visit_undef_node(node)
+    end
+
     # Interpolated parts and %w[] elements have no opening. A heredoc's body
     # lies outside its node's span, so replacing the node would strand it.
     def visit_string_node(node)

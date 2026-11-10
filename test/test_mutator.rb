@@ -277,6 +277,64 @@ class TestMutator < Minitest::Test
     assert_equal HOSTILE, call_mutant(mutants.first, :m)
   end
 
+  def test_symbols
+    expected = [
+      <<~RUBY,
+        def uses_symbols
+          i = :"l33t h4x0r"
+          i = :blah
+          i = :and_blah
+        end
+      RUBY
+      <<~RUBY,
+        def uses_symbols
+          i = :blah
+          i = :"l33t h4x0r"
+          i = :and_blah
+        end
+      RUBY
+      <<~RUBY,
+        def uses_symbols
+          i = :blah
+          i = :blah
+          i = :"l33t h4x0r"
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_symbols", :lit)
+  end
+
+  def test_quoted_symbols
+    source = "def m\n  [:\"quoted\", %s(x)]\nend\n"
+
+    assert_mutants ["def m\n  [:\"l33t h4x0r\", %s(x)]\nend\n",
+                    "def m\n  [:\"quoted\", :\"l33t h4x0r\"]\nend\n"],
+                   inline_mutants(source, :lit)
+  end
+
+  def test_label_keys_stay_labels
+    source = "def m\n  [{ foo: 2 }, { \"foo\": 3 }]\nend\n"
+    mutants = inline_mutants(source, :lit)
+
+    assert_mutants ["def m\n  [{ \"l33t h4x0r\": 2 }, { \"foo\": 3 }]\nend\n",
+                    "def m\n  [{ foo: 7 }, { \"foo\": 3 }]\nend\n",
+                    "def m\n  [{ foo: 2 }, { \"l33t h4x0r\": 3 }]\nend\n",
+                    "def m\n  [{ foo: 2 }, { \"foo\": 8 }]\nend\n"],
+                   mutants
+    assert_equal [{ "l33t h4x0r": 2 }, { foo: 3 }], call_mutant(mutants.first, :m)
+  end
+
+  def test_symbol_array_elements_are_not_mutated
+    assert_empty inline_mutants("def m\n  %i[a b]\nend\n", :lit)
+  end
+
+  def test_alias_and_undef_are_not_mutated
+    source = "def m\n  alias foo bar\n  alias :baz :qux\n  undef foo, :baz\nend\n"
+
+    assert_empty inline_mutants(source, :lit)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
