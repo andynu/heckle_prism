@@ -65,6 +65,16 @@ class Heckle
       super
     end
 
+    def visit_while_node(node)
+      replace(:while, node.keyword_loc, "until")
+      super
+    end
+
+    def visit_until_node(node)
+      replace(:until, node.keyword_loc, "while")
+      super
+    end
+
     # A range of two integer literals is one site; its ends are not mutated
     # separately. Any other range is descended into. Always inclusive.
     def visit_range_node(node)

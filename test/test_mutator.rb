@@ -431,6 +431,66 @@ class TestMutator < Minitest::Test
                    inline_mutants("def m(a)\n  a..10\nend\n", :lit)
   end
 
+  def test_while
+    expected = [
+      <<~RUBY,
+        def uses_while
+          until some_func
+            some_other_func
+          end
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_while", :while)
+  end
+
+  def test_until
+    expected = [
+      <<~RUBY,
+        def uses_until
+          while some_func
+            some_other_func
+          end
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_until", :until)
+  end
+
+  def test_modifier_loops
+    assert_mutants ["def m\n  x until y\nend\n"], inline_mutants("def m\n  x while y\nend\n", :while)
+    assert_mutants ["def m\n  x while y\nend\n"], inline_mutants("def m\n  x until y\nend\n", :until)
+  end
+
+  def test_begin_end_while_keeps_running_the_body_first
+    source = "def m\n  n = 0\n  begin\n    n += 1\n  end while n > 5\n  n\nend\n"
+    mutants = inline_mutants(source, :while)
+
+    assert_mutants ["def m\n  n = 0\n  begin\n    n += 1\n  end until n > 5\n  n\nend\n"], mutants
+    assert_equal 6, call_mutant(mutants.first, :m)
+  end
+
+  def test_only_the_loop_keyword_changes
+    source = <<~RUBY
+      def m
+        while ready? # while
+          log "while"
+        end
+      end
+    RUBY
+    expected = <<~RUBY
+      def m
+        until ready? # while
+          log "while"
+        end
+      end
+    RUBY
+
+    assert_mutants [expected], inline_mutants(source, [:while, :until])
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
