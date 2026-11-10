@@ -140,6 +140,26 @@ class Heckle
       super
     end
 
+    def visit_global_variable_write_node(node)
+      assignment(:gasgn, node)
+      super
+    end
+
+    def visit_global_variable_operator_write_node(node)
+      assignment(:gasgn, node)
+      super
+    end
+
+    def visit_global_variable_or_write_node(node)
+      assignment(:gasgn, node)
+      super
+    end
+
+    def visit_global_variable_and_write_node(node)
+      assignment(:gasgn, node)
+      super
+    end
+
     # A range of two integer literals is one site; its ends are not mutated
     # separately. Any other range is descended into. Always inclusive.
     def visit_range_node(node)
