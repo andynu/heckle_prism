@@ -929,6 +929,34 @@ class TestMutator < Minitest::Test
     assert_mutants [expected], inline_mutants(source, [:lasgn, :call])
   end
 
+  def test_iasgn
+    expected = [
+      <<~RUBY,
+        def uses_iasgn
+          @ivar = nil
+          @ivar = nil
+        end
+      RUBY
+      <<~RUBY,
+        def uses_iasgn
+          @ivar = 5
+          @ivar = 42
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("uses_iasgn", :iasgn)
+  end
+
+  def test_iasgn_compound_forms
+    source = "def m\n  @a += 1\n  @a ||= 2\n  @a &&= nil\nend\n"
+
+    assert_mutants ["def m\n  @a += nil\n  @a ||= 2\n  @a &&= nil\nend\n",
+                    "def m\n  @a += 1\n  @a ||= nil\n  @a &&= nil\nend\n",
+                    "def m\n  @a += 1\n  @a ||= 2\n  @a &&= 42\nend\n"],
+                   inline_mutants(source, :iasgn)
+  end
+
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
     mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
