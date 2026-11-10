@@ -129,6 +129,8 @@ class Heckle
     @original_method = resolve_method
     @file, @line = @original_method.source_location
     @found = locate_source
+    @visibility = visibility
+    @installed = false
   end
 
   ##
@@ -154,6 +156,31 @@ class Heckle
 
   def mutant_source(mutation)
     mutation.apply(original_source, def_node.location.start_offset)
+  end
+
+  ##
+  # Replaces the live method with the mutant for +mutation+. The def is
+  # evaluated inside its original lexical nesting, at its original file and
+  # line, so constant lookup and backtraces match the original. Visibility
+  # is preserved.
+
+  def install(mutation)
+    remove_live_method
+    eval(wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file, def_node.location.start_line)
+    @owner.send(@visibility, @name)
+    @installed = true
+  end
+
+  ##
+  # Puts the original method back. Does nothing unless a mutant is installed.
+
+  def restore
+    return unless @installed
+
+    remove_live_method
+    @owner.send(:define_method, @name, @original_method)
+    @owner.send(@visibility, @name)
+    @installed = false
   end
 
   ##
@@ -310,6 +337,39 @@ class Heckle
     not_found("no def at #{@file}:#{@line}") unless found
 
     found
+  end
+
+  def visibility
+    if @owner.private_method_defined?(@name, false)
+      :private
+    elsif @owner.protected_method_defined?(@name, false)
+      :protected
+    else
+      :public
+    end
+  end
+
+  # Removing first keeps -w from warning about a redefinition.
+  def remove_live_method
+    defined = @owner.method_defined?(@name, false) || @owner.private_method_defined?(@name, false)
+    @owner.send(:remove_method, @name) if defined
+  end
+
+  # `module A; class B; class << self; <def>\nend; end; end` on the def's
+  # first line. No superclass, so reopening a subclass cannot mismatch.
+  def wrapped(def_source)
+    nesting = @found.nesting
+    header = nesting.map { |node| "#{scope_header(node)}; " }.join
+    footer = (["end"] * nesting.size).join("; ")
+    "#{header}#{def_source}\n#{footer}\n"
+  end
+
+  def scope_header(node)
+    case node
+    when Prism::SingletonClassNode then "class << self"
+    when Prism::ClassNode then "class #{node.constant_path.slice}"
+    when Prism::ModuleNode then "module #{node.constant_path.slice}"
+    end
   end
 
 end

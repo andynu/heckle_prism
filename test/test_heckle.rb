@@ -26,7 +26,151 @@ class TestHeckle < Minitest::Test
   SUBJECTS = File.expand_path("fixtures/heckle_subjects.rb", __dir__)
 
   def heckle(klass_name, method_name, nodes = Heckle::MUTATABLE_NODES)
-    TestHeckler.new(klass_name, method_name, nodes)
+    heckler = TestHeckler.new(klass_name, method_name, nodes)
+    (@hecklers ||= []) << heckler
+    heckler
+  end
+
+  def teardown
+    (@hecklers || []).each(&:restore)
+  end
+
+  # Installs the only mutation of klass_name#method_name of the given kinds.
+  def install_only(klass_name, method_name, nodes)
+    heckler = heckle(klass_name, method_name, nodes)
+    assert_equal 1, heckler.mutations.size
+    heckler.install(heckler.mutations.first)
+    heckler
+  end
+
+  def test_install_and_restore_instance_method
+    heckler = install_only("HeckleSubjects", "answer", [:lit])
+
+    assert_equal 47, HeckleSubjects.new.answer
+    heckler.restore
+    assert_equal 42, HeckleSubjects.new.answer
+  end
+
+  def test_install_and_restore_self_class_method
+    heckler = install_only("HeckleSubjects", "self.class_answer", [:lit])
+
+    assert_equal 47, HeckleSubjects.class_answer
+    heckler.restore
+    assert_equal 42, HeckleSubjects.class_answer
+  end
+
+  def test_install_and_restore_singleton_class_method
+    heckler = install_only("HeckleSubjects", "self.singleton_answer", [:lit])
+
+    assert_equal 47, HeckleSubjects.singleton_answer
+    heckler.restore
+    assert_equal 42, HeckleSubjects.singleton_answer
+  end
+
+  def test_private_method_stays_private
+    heckler = install_only("HeckleSubjects", "hidden_answer", [:lit])
+
+    assert HeckleSubjects.private_method_defined?(:hidden_answer, false)
+    assert_equal 47, HeckleSubjects.new.call_hidden
+    assert_raises(NoMethodError) { HeckleSubjects.new.hidden_answer }
+
+    heckler.restore
+    assert HeckleSubjects.private_method_defined?(:hidden_answer, false)
+    assert_equal 42, HeckleSubjects.new.call_hidden
+    assert_raises(NoMethodError) { HeckleSubjects.new.hidden_answer }
+  end
+
+  def test_protected_method_stays_protected
+    heckler = install_only("HeckleSubjects", "guarded_answer", [:lit])
+
+    assert HeckleSubjects.protected_method_defined?(:guarded_answer, false)
+    assert_equal 47, HeckleSubjects.new.call_guarded(HeckleSubjects.new)
+    assert_raises(NoMethodError) { HeckleSubjects.new.guarded_answer }
+
+    heckler.restore
+    assert HeckleSubjects.protected_method_defined?(:guarded_answer, false)
+    assert_equal 42, HeckleSubjects.new.call_guarded(HeckleSubjects.new)
+  end
+
+  def test_public_method_stays_public
+    heckler = install_only("HeckleSubjects", "answer", [:lit])
+
+    assert HeckleSubjects.public_method_defined?(:answer, false)
+    heckler.restore
+    assert HeckleSubjects.public_method_defined?(:answer, false)
+  end
+
+  def test_mutant_resolves_constants_of_enclosing_module
+    heckler = install_only("HeckleNesting::Inner", "limit", [:lit])
+
+    assert_equal 16, HeckleNesting::Inner.new.limit
+    heckler.restore
+    assert_equal 11, HeckleNesting::Inner.new.limit
+  end
+
+  def test_class_with_superclass_is_reopened
+    heckler = install_only("HeckleSubjectsChild", "own_answer", [:lit])
+
+    assert_equal 47, HeckleSubjectsChild.new.own_answer
+    assert_equal HeckleSubjects, HeckleSubjectsChild.superclass
+    heckler.restore
+    assert_equal 42, HeckleSubjectsChild.new.own_answer
+  end
+
+  def test_two_installs_then_one_restore
+    heckler = heckle("HeckleSubjects", "pair", [:lit])
+    first, second = heckler.mutations
+
+    heckler.install(first)
+    assert_equal [6, 2], HeckleSubjects.new.pair
+    heckler.install(second)
+    assert_equal [1, 7], HeckleSubjects.new.pair
+    heckler.restore
+    assert_equal [1, 2], HeckleSubjects.new.pair
+  end
+
+  def test_restore_without_install_keeps_original
+    heckler = heckle("HeckleSubjects", "answer", [:lit])
+    original = HeckleSubjects.instance_method(:answer)
+
+    heckler.restore
+    assert_equal original, HeckleSubjects.instance_method(:answer)
+  end
+
+  def test_restore_keeps_original_source_location
+    location = HeckleSubjects.instance_method(:answer).source_location
+    heckler = install_only("HeckleSubjects", "answer", [:lit])
+    heckler.restore
+
+    assert_equal [SUBJECTS, 8], location.first(2)
+    assert_equal location, HeckleSubjects.instance_method(:answer).source_location
+  end
+
+  def test_mutant_backtrace_points_at_original_file_and_line
+    install_only("HeckleSubjects", "explode", [:str])
+
+    error = assert_raises(ArgumentError) { HeckleSubjects.new.explode }
+    assert_equal "l33t h4x0r", error.message
+    frame = error.backtrace_locations.first
+    assert_equal [SUBJECTS, 28], [frame.path, frame.lineno]
+    assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[27].strip
+  end
+
+  def test_install_and_restore_are_silent_under_verbose
+    verbose = $VERBOSE
+    assert_silent do
+      $VERBOSE = true
+      heckler = heckle("HeckleSubjects", "pair", [:lit])
+      first, second = heckler.mutations
+      heckler.install(first)
+      heckler.install(second)
+      heckler.restore
+      class_heckler = heckle("HeckleSubjects", "self.singleton_answer", [:lit])
+      class_heckler.install(class_heckler.mutations.first)
+      class_heckler.restore
+    end
+  ensure
+    $VERBOSE = verbose
   end
 
   def test_mutatable_nodes
