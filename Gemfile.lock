@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     heckle (2.0.0.b1)
-      minitest (>= 5.27.0)
+      minitest (>= 5.16.0)
       prism (>= 1.5.1)
 
 GEM

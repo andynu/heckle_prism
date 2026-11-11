@@ -14,7 +14,8 @@ Gem::Specification.new do |spec|
     do anything.
   TEXT
 
-  spec.required_ruby_version = ">= 4.0.9"
+  # The oldest Ruby any prism release installs on.
+  spec.required_ruby_version = ">= 2.7.0"
 
   spec.files = Dir.chdir(__dir__) do
     `git ls-files -z lib bin README.txt History.txt`.split("\x0")
@@ -24,5 +25,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "prism", ">= 1.5.1"
-  spec.add_dependency "minitest", ">= 5.27.0"
+  # Minitest.seed, which the in-process run reads, arrived in 5.16.0.
+  spec.add_dependency "minitest", ">= 5.16.0"
 end
