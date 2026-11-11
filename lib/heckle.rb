@@ -180,12 +180,16 @@ class Heckle
   # is preserved.
 
   def install(mutation)
+    # Built while the original method is live: heckling Heckle itself
+    # replaces methods that building the source calls.
+    prelude = magic_comments
+    source = prelude + wrapped(mutant_source(mutation))
+    line = def_node.location.start_line - prelude.count("\n")
+
     remove_live_method
     # Set before the eval, so restore puts the original back if it raises.
     @installed = true
-    prelude = magic_comments
-    eval(prelude + wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file,
-         def_node.location.start_line - prelude.count("\n"))
+    eval(source, TOPLEVEL_BINDING, @file, line)
     @owner.send(@visibility, @name)
   end
 
@@ -280,11 +284,12 @@ class Heckle
 
     mutations.each_with_index do |mutation, index|
       @reporter.remaining_mutations(mutations.size - index)
-      @current_mutation = mutation
+      # Survivor text is taken before install, for the same reason as there.
+      @current_mutant = mutant_source(mutation)
       begin
         if @@debug
           @reporter.replacing(klass_name, method_name,
-                              dedent(original_source), dedent(mutant_source(mutation)))
+                              dedent(original_source), dedent(@current_mutant))
         end
 
         @count += 1
@@ -445,7 +450,7 @@ class Heckle
   end
 
   def record_passing_mutation
-    @failures << mutant_source(@current_mutation)
+    @failures << @current_mutant
   end
 
   def def_node

@@ -235,6 +235,29 @@ class TestHeckle < Minitest::Test
     assert_equal 42, HeckleSubjects.new.answer
   end
 
+  # Heckling Heckle::Mutation#apply: building the mutant source calls the
+  # method being replaced.
+  def test_install_builds_the_mutant_before_removing_the_method
+    heckler = heckle("Heckle::Mutation", "apply", [:lasgn])
+    mutation = heckler.mutations.first
+
+    heckler.install(mutation)
+    assert_raises(TypeError, NoMethodError) { mutation.apply("x") }
+    heckler.restore
+    assert_equal "a = 7", Heckle::Mutation.new(kind: :lit, start_offset: 4, end_offset: 5,
+                                               replacement: "7").apply("a = 1")
+  end
+
+  def test_survivor_text_is_built_without_the_mutant
+    heckler = scripted("Heckle::Mutation", "apply", [:lasgn]) { true }
+    expected = heckler.mutations.map { |mutation| heckler.mutant_source(mutation) }
+
+    heckler.validate
+
+    assert_equal expected, heckler.failures
+    assert_includes expected.first, "start = nil"
+  end
+
   def test_class_with_superclass_is_reopened
     heckler = install_only("HeckleSubjectsChild", "own_answer", [:lit])
 
