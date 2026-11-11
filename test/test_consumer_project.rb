@@ -11,8 +11,15 @@ class TestConsumerProject < Minitest::Test
   # subprocess load this repository's bundle instead of the fixture's.
   def bundle_exec(*args)
     env = { "BUNDLE_GEMFILE" => File.join(PROJECT, "Gemfile") }
-    run = -> { Open3.capture3(env, RbConfig.ruby, Gem.bin_path("bundler", "bundle"), "exec", *args, chdir: PROJECT) }
+    bundle = bundle_path
+    run = -> { Open3.capture3(env, RbConfig.ruby, bundle, "exec", *args, chdir: PROJECT) }
     defined?(Bundler) ? Bundler.with_unbundled_env(&run) : run.()
+  end
+
+  # Looked up before unbundling: Bundler 2.5 and earlier answer this from
+  # BUNDLE_BIN_PATH, which with_unbundled_env clears.
+  def bundle_path
+    Gem.bin_path("bundler", "bundle")
   end
 
   def test_heckles_the_whole_class
@@ -31,7 +38,7 @@ class TestConsumerProject < Minitest::Test
   # escaping into it into exit status 0.
   def test_closed_stdout_ends_non_zero_with_methods_restored
     env = { "BUNDLE_GEMFILE" => File.join(PROJECT, "Gemfile") }
-    args = [RbConfig.ruby, Gem.bin_path("bundler", "bundle"), "exec", "heckle", "Thermometer",
+    args = [RbConfig.ruby, bundle_path, "exec", "heckle", "Thermometer",
             "-v", "-t", "pipe/thermometer_pipe_test.rb"]
     run = lambda do
       Open3.popen3(env, *args, chdir: PROJECT) do |stdin, stdout, stderr, thread|
