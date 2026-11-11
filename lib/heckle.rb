@@ -251,7 +251,7 @@ class Heckle
     @failures = []
 
     if mutations.empty? then
-      @reporter.no_mutations(method_name)
+      @reporter.no_mutations(klass_name, method_name)
       return
     end
 
@@ -330,8 +330,8 @@ class Heckle
   end
 
   class Reporter
-    def no_mutations(method_name)
-      warning "#{method_name} has a thick skin. There's nothing to heckle."
+    def no_mutations(klass_name, method_name)
+      warning "#{klass_name}\##{method_name} has a thick skin. There's nothing to heckle."
     end
 
     def method_loaded(klass_name, method_name, mutations_left)

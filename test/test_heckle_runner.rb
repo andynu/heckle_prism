@@ -85,7 +85,7 @@ class TestHeckleRunner < Minitest::Test
     assert_includes out, "Skipping Tally#count: no def at"
     loaded = out.scan(/^\*\*\*  (Tally#\S+) loaded/).flatten
     assert_equal %w[Tally#bump Tally#initialize Tally#self.start], loaded
-    assert_includes out, "label has a thick skin."
+    assert_includes out, "Tally#label has a thick skin."
     assert_includes out, "Passed    :   3\nFailed    :   0\nThick Skin:   1\n"
     assert_equal 0, status.exitstatus
   end
@@ -126,7 +126,7 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, status.exitstatus
 
     out, _err, status = heckle("Doubler", "double", "--assignments")
-    assert_includes out, "double has a thick skin."
+    assert_includes out, "Doubler#double has a thick skin."
     assert_equal 0, status.exitstatus
   end
 

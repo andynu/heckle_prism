@@ -248,7 +248,7 @@ class TestHeckle < Minitest::Test
     heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk "no run expected" }
 
     assert_nil heckler.validate
-    assert_equal [[:no_mutations, :uses_nothing]], reporter.calls
+    assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
     assert_equal 0, heckler.count
   end
 
@@ -421,6 +421,14 @@ class TestHeckle < Minitest::Test
     assert_includes out, "The following mutations didn't cause test failures:\n"
     assert_includes out, "--- original\n+++ mutation\n"
     assert_includes out, "\n def pair\n-  [1, 2]\n+  [6, 2]\n end\n"
+  end
+
+  def test_real_reporter_thick_skin_names_the_class
+    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, Heckle::Reporter.new) { flunk "no run expected" }
+
+    out, _err = capture_io { heckler.validate }
+
+    assert_includes out, "!!! HeckleDummy#uses_nothing has a thick skin. There's nothing to heckle.\n"
   end
 
   def test_install_and_restore_are_silent_under_verbose
