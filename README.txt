@@ -212,13 +212,16 @@ heckle process prints the results, survivor diffs, totals and summary
 itself, the same as without --fork, and never loads a mutant, so a
 mutant cannot change state that later mutants or heckle itself see.
 
-The timeout applies to the child. When a child runs over, heckle sends
-it TERM, then KILL a second later, and prints the usual timeout
-warning. ^C in heckle stops the child too. A child that ends any other
-way (an exception out of the test run, an unexpected exit status, a
-signal) gets a warning, and its mutant is counted as killed, never as
-survived. Fork mode needs Process.fork; on a Ruby without it, such as
-Ruby on Windows, heckle stops with a one-line message.
+The timeout applies to the child. Each child runs in a process group
+of its own, with any processes its tests start. When a child runs
+over, heckle sends the group TERM, then KILL a second later if the
+child is still running, then KILL to whatever is left of the group, and
+prints the usual timeout warning. ^C stops the child's group the same
+way. A child that ends any other way (an exception out of the test
+run, an unexpected exit status, a signal) gets a warning, and its
+mutant is counted as killed, never as survived. Fork mode needs
+Process.fork; on a Ruby without it, such as Ruby on Windows, heckle
+stops with a one-line message.
 
 Use it when the code under test or its tests keep state from one test
 run to the next (globals, class variables, memoized caches,

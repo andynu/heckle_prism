@@ -1319,6 +1319,58 @@ class TestHeckle < Minitest::Test
     assert_reaped heckler.pids
   end
 
+  # True once every process holding the write end of +reader+'s pipe has
+  # exited. Waits at most five seconds for that, so a leak fails rather
+  # than hangs.
+  def closed_by_all_writers?(reader)
+    return false unless IO.select([reader], nil, nil, 5)
+
+    reader.read_nonblock(1024, exception: false).nil?
+  end
+
+  # Stops the child only once its own child reports it has started.
+  class GrandchildHeckler < ForkRecordingHeckler
+    attr_accessor :ready, :writer, :started
+
+    private
+
+    def stop_child(pid, waiter)
+      writer.close
+      self.started = ready.gets
+      super
+    end
+  end
+
+  # A timed-out child's own children (a server its tests started, say)
+  # are stopped with it, including one that ignores TERM.
+  def test_fork_timeout_stops_the_childs_children
+    [false, true].each do |ignore_term|
+      begin
+        ready, ready_writer = IO.pipe
+        held, holder = IO.pipe
+        heckler = forked("HeckleSubjects", "answer", [:lit], heckler_class: GrandchildHeckler) do
+          fork do
+            trap("TERM") {} if ignore_term
+            ready_writer.puts "started"
+            sleep
+          end
+          sleep
+        end
+        heckler.ready = ready
+        heckler.writer = ready_writer
+
+        with_timeout(0.2) { with_fork { heckler.validate } }
+        holder.close
+
+        assert_equal "started\n", heckler.started, "ignore_term: #{ignore_term}"
+        assert closed_by_all_writers?(held), "grandchild left running, ignore_term: #{ignore_term}"
+        assert_reaped heckler.pids
+      ensure
+        [ready, ready_writer, held, holder].each { |io| io&.close }
+      end
+    end
+  end
+
   # Signals the child only once it reports it has trapped TERM, and
   # records the signals sent.
   # The parent's end of the pipe is closed first, so a child that died
