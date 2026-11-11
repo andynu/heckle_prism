@@ -631,7 +631,7 @@ class TestHeckle < Minitest::Test
 
       string = heckler.rand_string
       assert_operator string.size, :<, 50
-      assert(string.each_char.all? { |char| char.ord < 126 })
+      assert(string.each_char.all? { |char| (32..126).cover?(char.ord) })
 
       symbol = heckler.rand_symbol
       assert_match(/\A[a-zA-Z]{1,50}\z/, symbol.to_s)
@@ -640,6 +640,39 @@ class TestHeckle < Minitest::Test
       assert_includes 0...50, range.begin
       assert_operator range.end, :>=, range.begin
     end
+  end
+
+  def test_rand_string_is_printable_ascii
+    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    strings = Array.new(1000) { heckler.rand_string }
+
+    strings.each { |string| assert_match(/\A[ -~]{0,49}\z/, string) }
+    assert_includes 40..49, strings.map(&:size).max
+  end
+
+  def test_drawn_strings_make_valid_string_and_regex_mutants
+    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    source = "def m\n  [\"x\", /y/]\nend\n"
+    def_node = Prism.parse(source).value.statements.body.first
+    drawn = []
+    randomizer = Object.new
+    randomizer.define_singleton_method(:rand_string) { (drawn << heckler.rand_string).last }
+
+    200.times do
+      drawn.clear
+      string_mutant, regex_mutant = Heckle::Mutator.new(randomizer).mutations_for(def_node)
+                                                                    .map { |mutation| mutation.apply(source) }
+
+      [string_mutant, regex_mutant].each { |mutant| assert Prism.parse(mutant).success?, mutant }
+      assert_equal drawn[0], call_inline(string_mutant)[0]
+      assert_equal drawn[1], call_inline(regex_mutant)[1].match(drawn[1])[0]
+    end
+  end
+
+  def call_inline(mutant)
+    holder = Object.new
+    holder.instance_eval(mutant)
+    holder.m
   end
 
   def test_nothing_to_mutate

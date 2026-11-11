@@ -321,12 +321,13 @@ class Heckle
   end
 
   ##
-  # Returns a random String
+  # Returns a random String of 0 to 49 printable ASCII characters (space
+  # through tilde), so survivor diffs stay readable.
 
   def rand_string
     size = rand(50)
     str = +""
-    size.times { str << rand(126).chr }
+    size.times { str << (32 + rand(95)).chr }
     str
   end
 
