@@ -145,8 +145,10 @@ The reasons are "timed out", "ran out of memory" (fork mode, over the
 memory limit or out of memory in the child), "crashed" (fork mode: the
 test run raised, the child died by a signal or exited with an
 unexpected status), "failed to install" (fork mode), "had a syntax
-error" and "canceled" (^C). Several are listed in that order, separated
-by commas, as in "2 timed out, 1 crashed".
+error", "canceled" (^C) and "not run" (in-process, after heckle could
+not clean up after an earlier mutant; see TIMEOUTS AND MEMORY). Several
+are listed in that order, separated by commas, as in "2 timed out, 1
+crashed".
 
 A method with nothing to mutate gets the thick skin warning and no such
 lines. The Heckle Results block at the end counts methods (Passed,
@@ -247,7 +249,8 @@ Known limits:
 * A mutant can change state that outlives one test run, such as a
   global, a class variable or a cache, and that change is seen by the
   runs of later mutants. With --fork it is not, since each mutant's
-  changes end with its child process.
+  changes end with its child process: --fork is the mode that keeps
+  mutants apart from each other.
 * Equivalent mutants are reported like any other survivor. A mutant
   that changes the code without changing what the method does cannot be
   caught by any test, and heckle cannot tell it apart from a gap in the
@@ -281,6 +284,21 @@ raises Heckle::Timeout in it, prints the timeout warning and the
 mutant's diff, counts the mutant as timed out and goes on. Heckle::Timeout is an Exception, not a
 StandardError, so neither a bare rescue nor "rescue StandardError" in
 the code under test catches it, and Minitest lets it through.
+
+After a timeout. Minitest skips the teardown of a test that the timeout
+(or ^C) stopped, and leaves the workers of its parallel executor
+waiting. Before the next mutant runs, heckle puts the original method
+back, then runs that test's teardown hooks quietly, as Minitest runs
+them after a failure, and replaces the executor with a fresh one,
+killing any of its workers still running a test. Left alone, the
+waiting workers would make every later mutant in the process time out
+too, and state a teardown resets, such as an open transaction, would
+carry into later mutants' tests. Two things heckle cannot clean up in-process: a teardown that
+does not finish within the timeout, and a worker that Thread#kill does
+not stop (one in a long C call, say). After either, heckle runs no more
+mutants in that process. It reports each later one as "Not run", with
+the reason and its diff, rather than give a verdict the earlier mutant
+may have caused. Run heckle with --fork to judge them.
 
 How a timeout gets lost. Ruby's Timeout raises once and does not raise
 again. Heckle::Timeout used to be a StandardError. On a Rails
@@ -345,9 +363,11 @@ What in-process mode cannot contain:
   heckle never ends. The RLIMIT_DATA backstop still bounds memory, but
   on Ruby 3.2 and 3.3 a process that reaches it with small objects can
   then spin in garbage collection, using a CPU, until it is killed.
-* Threads the tests start, including the workers of Minitest's
-  parallelize_me!. A timeout ends the test run in heckle's thread, but
-  such a thread keeps running until heckle exits.
+* Threads the tests start. A timeout ends the test run in heckle's
+  thread, but such a thread keeps running until heckle exits. The
+  workers of Minitest's parallelize_me! are the exception: heckle kills
+  them after a timeout, and runs no more mutants when one cannot be
+  killed.
 * State a mutant changes that later mutants see (see Known limits).
 
 --fork contains all of these. The heckle process never runs a mutant,
