@@ -448,6 +448,19 @@ class TestHeckle < Minitest::Test
     assert_equal({ dasgn: :lasgn, dasgn_curr: :lasgn }, Heckle::NODE_ALIASES)
   end
 
+  def test_public_surface
+    %i[count klass klass_name method_name failures].each do |name|
+      assert Heckle.public_method_defined?(name), "#{name} should be public"
+    end
+    %i[count= klass= klass_name= method_name=].each do |name|
+      refute Heckle.method_defined?(name), "#{name} should not exist"
+    end
+    assert Heckle.public_method_defined?(:failures=)
+    %i[run_tests record_passing_mutation].each do |name|
+      assert Heckle.private_method_defined?(name), "#{name} should be private"
+    end
+  end
+
   def test_instance_method
     heckler = heckle("HeckleDummy", "uses_literal")
 

@@ -56,7 +56,7 @@ class Heckle
   ##
   # Mutation count
 
-  attr_accessor :count
+  attr_reader :count
 
   ##
   # Mutations that caused failures
@@ -66,17 +66,17 @@ class Heckle
   ##
   # Class being heckled
 
-  attr_accessor :klass
+  attr_reader :klass
 
   ##
   # Name of class being heckled
 
-  attr_accessor :klass_name
+  attr_reader :klass_name
 
   ##
   # Name of method being heckled
 
-  attr_accessor :method_name
+  attr_reader :method_name
 
   @@debug = false
   @@guess_timeout = true
@@ -240,14 +240,6 @@ class Heckle
   end
   private_class_method :quietly
 
-  def run_tests
-    if tests_pass? then
-      record_passing_mutation
-    else
-      @reporter.report_test_failures
-    end
-  end
-
   ##
   # Runs the tests against each mutant in turn. Returns nil when there is
   # nothing to mutate, true when every mutant was killed, false otherwise.
@@ -274,7 +266,7 @@ class Heckle
                               dedent(original_source), dedent(mutant_source(mutation)))
         end
 
-        self.count += 1
+        @count += 1
         install mutation
         ::Timeout::timeout(@@timeout, Heckle::Timeout) { run_tests }
       rescue SyntaxError => e
@@ -299,10 +291,6 @@ class Heckle
       @reporter.no_surviving_mutants
       true
     end
-  end
-
-  def record_passing_mutation
-    @failures << mutant_source(@current_mutation)
   end
 
   ##
@@ -411,6 +399,18 @@ class Heckle
   end
 
   private
+
+  def run_tests
+    if tests_pass? then
+      record_passing_mutation
+    else
+      @reporter.report_test_failures
+    end
+  end
+
+  def record_passing_mutation
+    @failures << mutant_source(@current_mutation)
+  end
 
   def def_node
     @found.def_node
