@@ -3,6 +3,6 @@ class Heckle
   ##
   # The version of Heckle you are using.
 
-  VERSION = '2.0.0.b1'
+  VERSION = '3.0.0'
 
 end
