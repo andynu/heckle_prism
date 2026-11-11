@@ -49,19 +49,9 @@ class Heckle
   ASGN_NODES = [:cvasgn, :gasgn, :iasgn, :lasgn].freeze
 
   ##
-  # Is this platform MS Windows-like?
-
-  WINDOZE = RUBY_PLATFORM =~ /mswin/
-
-  ##
-  # Path to the bit bucket.
-
-  NULL_PATH = WINDOZE ? 'NUL:' : '/dev/null'
-
-  ##
   # diff(1) executable
 
-  DIFF = WINDOZE ? 'diff.exe' : 'diff'
+  DIFF = "diff"
 
   ##
   # Mutation count
@@ -241,7 +231,7 @@ class Heckle
     return yield if @@debug
 
     stdout, stderr = $stdout, $stderr
-    File.open(NULL_PATH, "w") do |null|
+    File.open(File::NULL, "w") do |null|
       $stdout = $stderr = null
       yield
     ensure
