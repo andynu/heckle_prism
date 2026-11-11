@@ -1,0 +1,25 @@
+Timeout set to 5 seconds.
+Memory limit set to N MB.
+Initial tests pass. Let's rumble.
+
+**********************************************************************
+***  Doubler#double loaded with 5 possible mutations
+**********************************************************************
+
+5 mutations remaining...
+4 mutations remaining...
+3 mutations remaining...
+2 mutations remaining...
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 5 mutants survived
+
+Heckle Results:
+
+Passed    :   1
+Failed    :   0
+Thick Skin:   0
+Mutants   :   5 killed, 0 survived
+
+All heckling was thwarted! YAY!!!

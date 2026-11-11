@@ -1,0 +1,23 @@
+Skipping Gauge#level: no def at ROOT/test/fixtures/minitest_project/lib/gauge.rb:7
+Skipping Gauge#level=: no def at ROOT/test/fixtures/minitest_project/lib/gauge.rb:7
+Timeout set to 5 seconds.
+Memory limit set to N MB.
+Initial tests pass. Let's rumble.
+
+**********************************************************************
+***  Gauge#read loaded with 1 possible mutations
+**********************************************************************
+
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 1 mutants survived
+
+Heckle Results:
+
+Passed    :   1
+Failed    :   0
+Thick Skin:   0
+Mutants   :   1 killed, 0 survived
+
+All heckling was thwarted! YAY!!!

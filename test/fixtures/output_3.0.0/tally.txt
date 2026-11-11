@@ -1,0 +1,47 @@
+Skipping Tally#count: no def at ROOT/test/fixtures/minitest_project/lib/tally.rb:2
+Timeout set to 5 seconds.
+Memory limit set to N MB.
+Initial tests pass. Let's rumble.
+
+**********************************************************************
+***  Tally#bump loaded with 3 possible mutations
+**********************************************************************
+
+3 mutations remaining...
+2 mutations remaining...
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 3 mutants survived
+
+**********************************************************************
+***  Tally#initialize loaded with 2 possible mutations
+**********************************************************************
+
+2 mutations remaining...
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 2 mutants survived
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! Tally#label has a thick skin. There's nothing to heckle.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+**********************************************************************
+***  Tally#self.start loaded with 1 possible mutations
+**********************************************************************
+
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 1 mutants survived
+
+Heckle Results:
+
+Passed    :   3
+Failed    :   0
+Thick Skin:   1
+Mutants   :   6 killed, 0 survived
+
+All heckling was thwarted! YAY!!!

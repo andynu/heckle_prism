@@ -21,8 +21,8 @@ class Heckle
   def run_forked(mutation)
     status = wait_for_child(mutation)
     if status == :over_memory
-      @reporter.warning "The forked test run went over the memory limit of #{megabytes(@@memory_limit)} " \
-                        "and was killed. Not counted as a survivor."
+      report_not_judged :memory, "The forked test run went over the memory limit of #{megabytes(@@memory_limit)} " \
+                                 "and was killed. Not counted as a survivor."
       return
     end
 
@@ -31,11 +31,11 @@ class Heckle
     when FORK_KILLED then @reporter.report_test_failures
     when FORK_INSTALL_FAILED then raise_install_error(mutation)
     when FORK_RAISED
-      @reporter.warning "The tests raised an exception in the forked child. Not counted as a survivor."
+      report_not_judged :crash, "The tests raised an exception in the forked child. Not counted as a survivor."
     when FORK_OUT_OF_MEMORY
-      @reporter.warning "The forked test run ran out of memory. Not counted as a survivor."
+      report_not_judged :memory, "The forked test run ran out of memory. Not counted as a survivor."
     else
-      @reporter.warning "The forked test run #{child_ending(status)}. Not counted as a survivor."
+      report_not_judged :crash, "The forked test run #{child_ending(status)}. Not counted as a survivor."
     end
   end
 
@@ -119,7 +119,7 @@ class Heckle
     source, line = install_source(mutation)
     RubyVM::InstructionSequence.compile(source, @file, @file, line)
 
-    @reporter.warning "Installing the mutant raised an exception in the forked child. Not counted as a survivor."
+    report_not_judged :install, "Installing the mutant raised an exception in the forked child. Not counted as a survivor."
   end
 
   # TERM, then KILL if the child outlives the grace. Processes the child

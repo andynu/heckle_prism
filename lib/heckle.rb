@@ -313,11 +313,9 @@ class Heckle
       @reporter.remaining_mutations(mutations.size - index)
       # Survivor text is taken before install, for the same reason as there.
       @current_mutant = mutant_source(mutation)
+      @shown = [dedent(original_source), dedent(@current_mutant)]
       begin
-        if @@debug
-          @reporter.replacing(klass_name, method_name,
-                              dedent(original_source), dedent(@current_mutant))
-        end
+        @reporter.replacing(klass_name, method_name, *@shown) if @@debug
 
         @count += 1
         if @@fork then
@@ -328,11 +326,11 @@ class Heckle
           run_tests(*reports)
         end
       rescue SyntaxError => e
-        @reporter.warning "Mutation caused a syntax error:\n\n#{e.message}"
+        report_not_judged :syntax, "Mutation caused a syntax error:\n\n#{e.message}"
       rescue Heckle::Timeout
-        @reporter.warning "Your tests timed out. Heckle may have caused an infinite loop."
+        report_not_judged :timeout, "Your tests timed out. Heckle may have caused an infinite loop."
       rescue Interrupt
-        @reporter.warning 'Mutation canceled, hit ^C again to exit'
+        report_not_judged :canceled, 'Mutation canceled, hit ^C again to exit'
         sleep 2
       ensure
         restore
@@ -443,6 +441,18 @@ class Heckle
 
     def failure(original, failure)
       self.diff original, failure
+    end
+
+    ##
+    # A mutant the tests neither failed against nor passed against.
+    # +reason+ is :timeout, :memory (fork mode), :crash (the forked child
+    # raised, died by a signal or exited oddly), :install (installing it
+    # raised in the forked child), :syntax or :canceled (^C). +message+
+    # is the warning, +original+ and +mutant+ the dedented sources.
+
+    def not_judged(reason, message, original, mutant)
+      warning message
+      diff original, mutant
     end
 
     def no_surviving_mutants
@@ -557,6 +567,11 @@ class Heckle
 
   def record_passing_mutation
     @failures << @current_mutant
+  end
+
+  # The mutant was neither killed by a failing test nor survived.
+  def report_not_judged(reason, message)
+    @reporter.not_judged(reason, message, *@shown)
   end
 
   def def_node

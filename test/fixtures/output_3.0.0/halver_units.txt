@@ -1,0 +1,47 @@
+Timeout set to 5 seconds.
+Memory limit set to N MB.
+Initial tests pass. Let's rumble.
+
+**********************************************************************
+***  Halver#halve loaded with 2 possible mutations
+**********************************************************************
+
+2 mutations remaining...
+1 mutations remaining...
+No mutants survived. Cool!
+
+0 of 2 mutants survived
+
+**********************************************************************
+***  Halver#quarter loaded with 2 possible mutations
+**********************************************************************
+
+2 mutations remaining...
+1 mutations remaining...
+
+The following mutations didn't cause test failures:
+
+--- original
++++ mutation
+ def quarter x
+-  x / 4
++
+ end
+
+--- original
++++ mutation
+ def quarter x
+-  x / 4
++
+ end
+
+2 of 2 mutants survived
+
+Heckle Results:
+
+Passed    :   1
+Failed    :   1
+Thick Skin:   0
+Mutants   :   2 killed, 2 survived
+
+Improve the tests and try again.

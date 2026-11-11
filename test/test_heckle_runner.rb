@@ -292,6 +292,25 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, run.status.exitstatus
   end
 
+  LEDGER = %w[-n call -T 1 -t runaway/ledger_test.rb].freeze
+  BANG = "#{'!' * 70}\n".freeze
+  TALLY_TIMED_OUT = "#{TIMEOUT_WARNING}#{BANG}\n" \
+                    "--- original\n+++ mutation\n def tally\n   @notes << :tallied\n   rows = 0\n" \
+                    "-  (1..@entries.size).each { rows += 1 }\n+  (1..nil).each { rows += 1 }\n" \
+                    "   rows\n end\n\n".freeze
+
+  # Ledger#tally's first mutant survives and its second loops forever.
+  def test_timeout_warning_shows_the_mutant
+    [[], ["--fork"]].each do |mode|
+      run = bounded_heckle("Ledger", "tally", *LEDGER, *mode)
+
+      refute run.killed, "heckle did not finish #{mode}; stdout:\n#{run.out}"
+      assert_equal "", run.err
+      assert_includes run.out, "1 mutations remaining...\n#{BANG}#{TALLY_TIMED_OUT}\nThe following mutations"
+      assert_equal 1, run.status.exitstatus, mode
+    end
+  end
+
   HOARDER = %w[Hoarder load -n call -t runaway/hoarder_test.rb].freeze
 
   def memory_limit_line(out)
@@ -521,6 +540,31 @@ class TestHeckleRunner < Minitest::Test
 
       assert_equal [strip_replacements(out), err, status.exitstatus],
                    [strip_replacements(fork_out), fork_err, fork_status.exitstatus], args.join(" ")
+    end
+  end
+
+  ROOT = File.expand_path("..", __dir__)
+
+  # Runs in which every mutant was killed or survived, with the exit status
+  # each gave. fixtures/output_3.0.0 holds what 3.0.0 printed for them,
+  # put through strip_replacements and with its checkout's path as ROOT.
+  UNCHANGED_COMMANDS = {
+    "doubler_double" => [%w[Doubler double], 0],
+    "doubler_double_partial" => [["Doubler", "double", *PARTIAL], 1],
+    "doubler_partial" => [["Doubler", *PARTIAL], 1],
+    "tally" => [["Tally", *TALLY], 0],
+    "halver_units" => [%w[Halver -t test/units/*_test.rb], 1],
+    "doubler_double_forced" => [%w[Doubler double --force --tests broken/broken_doubler_test.rb], 0],
+    "gauge" => [%w[Gauge], 0],
+  }.freeze
+
+  def test_output_without_unjudged_mutants_is_unchanged_from_3_0_0
+    UNCHANGED_COMMANDS.each do |name, (args, exit_status)|
+      out, err, status = heckle(*args)
+      expected = File.read(File.join(__dir__, "fixtures", "output_3.0.0", "#{name}.txt"))
+
+      assert_equal [expected, "", exit_status],
+                   [strip_replacements(out).gsub(ROOT, "ROOT"), err, status.exitstatus], name
     end
   end
 
