@@ -15,6 +15,15 @@ class Relay
     @entries.first
   end
 
+  # The same with the surviving note first: with -n call the note
+  # survives, the endless range times out and @entries.first comes last.
+  def hand_over
+    @notes << :handed
+    rows = 0
+    (1..@entries.size).each { rows += 1 }
+    @entries.first
+  end
+
   # The same shape holding a megabyte per row: with -n call its first
   # mutant holds a megabyte more every five milliseconds or so until
   # something stops it, the next four survive and the last is killed.

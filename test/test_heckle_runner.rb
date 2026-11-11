@@ -400,11 +400,50 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 2, run.out.scan("!!! Not run: the teardown of SlowTeardownRelayTest#test_pass_on, which heckle " \
                                  "ran after its test was stopped, did not finish within the 1 second timeout.").size
     assert_includes run.out, "run heckle with --fork to judge it.\n#{BANG}\n--- original\n"
-    assert_includes run.out, "0 of 3 mutants survived\n1 timed out, 2 not run\n\n"
-    assert_includes run.out, "Mutants   :   0 killed, 1 timed out, 2 not run, 0 survived\n"
-    assert_equal 0, run.status.exitstatus
+    assert_includes run.out, "1 mutations remaining...\n#{BANG}!!! Not run: "
+    refute_includes run.out, "No mutants survived."
+    refute_includes run.out, "YAY"
+    assert run.out.end_with?(" end\n\n0 of 3 mutants survived\n1 timed out, 2 not run\n\n" \
+                             "Heckle Results:\n\nPassed    :   0\nFailed    :   0\nThick Skin:   0\n" \
+                             "Not Run   :   1\n" \
+                             "Mutants   :   0 killed, 1 timed out, 2 not run, 0 survived\n\n" \
+                             "2 mutants were not run. Run heckle with --fork to judge them.\n"), run.out
+    assert_equal 1, run.status.exitstatus
 
     assert_judged_after_a_timeout(bounded_heckle(*args, "--fork"), "fork")
+  end
+
+  # hand_over's note survives, then its loop times out and the teardown
+  # runs over, so its last mutant is not run.
+  def test_survivor_and_mutants_not_run
+    run = bounded_heckle("Relay", "hand_over", "-n", "call", "-T", "1", "-t", "runaway/slow_teardown_relay_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert run.out.end_with?(" end\n\n1 of 3 mutants survived\n1 timed out, 1 not run\n\n" \
+                             "Heckle Results:\n\nPassed    :   0\nFailed    :   1\nThick Skin:   0\n" \
+                             "Mutants   :   0 killed, 1 timed out, 1 not run, 1 survived\n\n" \
+                             "Improve the tests and try again.\n" \
+                             "1 mutant was not run. Run heckle with --fork to judge it.\n"), run.out
+    assert_equal 1, run.status.exitstatus
+  end
+
+  # first is judged, initialize has nothing to mutate, pass times out and
+  # its teardown runs over, so its second mutant and peek's are not run.
+  def test_whole_class_with_mutants_not_run
+    run = bounded_heckle("Baton", "-n", "call", "-T", "1", "-t", "runaway/slow_teardown_baton_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_equal ["0 of 1 mutants survived\n\n", "0 of 2 mutants survived\n1 timed out, 1 not run\n\n",
+                  "0 of 1 mutants survived\n1 not run\n\n"],
+                 run.out.scan(/^\d+ of \d+ mutants survived\n(?:\d+ [a-z, 0-9]+\n)?\n/)
+    assert_equal 1, run.out.scan("No mutants survived. Cool!").size
+    assert run.out.end_with?("Heckle Results:\n\nPassed    :   1\nFailed    :   0\nThick Skin:   1\n" \
+                             "Not Run   :   2\n" \
+                             "Mutants   :   1 killed, 1 timed out, 2 not run, 0 survived\n\n" \
+                             "2 mutants were not run. Run heckle with --fork to judge them.\n"), run.out
+    assert_equal 1, run.status.exitstatus
   end
 
   # In fork mode a mutant over the memory limit is killed and the run goes

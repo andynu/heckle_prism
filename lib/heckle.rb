@@ -322,7 +322,8 @@ class Heckle
 
   ##
   # Runs the tests against each mutant in turn. Returns nil when there is
-  # nothing to mutate, true when every mutant was killed, false otherwise.
+  # nothing to mutate, true when no mutant survived, false otherwise.
+  # Mutants that were not run (not_judged[:unsettled]) are not survivors.
   # Any exception other than SyntaxError, a timeout or Interrupt propagates,
   # with the original method restored. In fork mode the tests' exceptions
   # stay in the child, which is warned about and not counted a survivor.
@@ -386,7 +387,8 @@ class Heckle
       @reporter.mutant_totals(*totals)
       false
     else
-      @reporter.no_surviving_mutants
+      # Mutants that were not run might have survived.
+      @reporter.no_surviving_mutants unless not_judged.key?(:unsettled)
       @reporter.mutant_totals(*totals)
       true
     end

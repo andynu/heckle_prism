@@ -9,7 +9,8 @@ class HeckleRunner
   class Error < StandardError; end
 
   ##
-  # Parses +argv+, heckles, and returns true when no mutant survived.
+  # Parses +argv+, heckles, and returns true when no mutant survived and
+  # every mutant was run.
   # Aborts with a one-line message on a usage error.
 
   def self.run argv=ARGV
@@ -139,6 +140,17 @@ class HeckleRunner
     "Mutants   : %3d killed, %s%d survived" % [killed, judged_not, survived]
   end
 
+  ##
+  # The closing line when +count+ mutants were not run.
+
+  def self.not_run_line count
+    if count == 1
+      "1 mutant was not run. Run heckle with --fork to judge it."
+    else
+      "#{count} mutants were not run. Run heckle with --fork to judge them."
+    end
+  end
+
   def self.canonical nodes
     nodes.map { |node| Heckle::NODE_ALIASES.fetch(node, node) }
   end
@@ -152,7 +164,7 @@ class HeckleRunner
   ##
   # Loads the tests, checks they pass unmutated (unless forced), heckles
   # the method or every method of the class, and prints a summary. Returns
-  # true when no mutant survived.
+  # true when no mutant survived and every mutant was run.
 
   def run
     check_nodes
@@ -172,25 +184,31 @@ class HeckleRunner
     survived = killed = 0
     not_judged = Hash.new(0)
     hecklers.each do |heckler|
-      counts[heckler.validate] += 1
+      result = heckler.validate
+      # A method with mutants not run and no survivor has not passed.
+      result = :not_run if result && heckler.not_judged.key?(:unsettled)
+      counts[result] += 1
       survived += heckler.failures.size
       heckler.not_judged.each { |reason, count| not_judged[reason] += count }
       killed += heckler.count - heckler.failures.size - heckler.not_judged.values.sum
     end
-    all_good = counts[false] == 0
+    not_run = not_judged[:unsettled]
+    all_good = counts[false] == 0 && not_run == 0
 
     puts "Heckle Results:"
     puts
     puts "Passed    : %3d" % counts[true]
     puts "Failed    : %3d" % counts[false]
     puts "Thick Skin: %3d" % counts[nil]
+    puts "Not Run   : %3d" % counts[:not_run] if counts[:not_run] > 0
     puts self.class.mutants_line(killed, not_judged, survived)
     puts
 
     if all_good then
       puts "All heckling was thwarted! YAY!!!"
     else
-      puts "Improve the tests and try again."
+      puts "Improve the tests and try again." if counts[false] > 0
+      puts self.class.not_run_line(not_run) if not_run > 0
     end
 
     all_good

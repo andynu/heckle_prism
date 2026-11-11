@@ -11,6 +11,13 @@ class SlowTeardownRelayTest < Minitest::Test
     assert_equal 5, result
   end
 
+  def test_hand_over
+    $relay_in_call = true
+    result = Relay.new([5, 6, 7]).hand_over
+    $relay_in_call = false
+    assert_equal 5, result
+  end
+
   def teardown
     sleep 5 if $relay_in_call
   end

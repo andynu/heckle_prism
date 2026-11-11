@@ -831,7 +831,17 @@ class TestHeckle < Minitest::Test
     assert_equal [[:not_judged, :unsettled, message, PAIR, PAIR_FIRST],
                   [:not_judged, :unsettled, message, PAIR, PAIR_SECOND]], not_judged_calls(reporter)
     assert_equal [:mutant_totals, 0, 2, { unsettled: 2 }], reporter.calls.last
+    refute_includes reporter.names, :no_surviving_mutants
     assert_equal [1, 2], HeckleSubjects.new.pair
+  end
+
+  def test_real_reporter_does_not_cheer_when_mutants_were_not_run
+    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { flunk "no run expected" }
+
+    out, _err = with_unsettled("a test thread could not be stopped") { capture_io { heckler.validate } }
+
+    refute_includes out, "No mutants survived."
+    assert out.end_with?(" end\n\n0 of 2 mutants survived\n2 not run\n\n"), out
   end
 
   def test_unsettled_parent_still_runs_forked_mutants
