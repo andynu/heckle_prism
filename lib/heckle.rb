@@ -45,6 +45,19 @@ class Heckle
   ASGN_NODES = [:cvasgn, :gasgn, :iasgn, :lasgn].freeze
 
   ##
+  # Why a mutant was not judged, neither killed by a failing test nor a
+  # survivor, with the words the totals use. Totals list them in this order.
+
+  NOT_JUDGED = {
+    timeout: "timed out",
+    memory: "ran out of memory",
+    crash: "crashed",
+    install: "failed to install",
+    syntax: "had a syntax error",
+    canceled: "canceled",
+  }.freeze
+
+  ##
   # diff(1) executable
 
   DIFF = "diff"
@@ -58,6 +71,15 @@ class Heckle
   # Mutations that caused failures
 
   attr_accessor :failures
+
+  ##
+  # Mutants of the last validate that were not judged: a count for each
+  # reason that occurred, keyed as in NOT_JUDGED and in its order.
+
+  def not_judged
+    NOT_JUDGED.keys.select { |reason| @not_judged[reason] > 0 }
+      .map { |reason| [reason, @not_judged[reason]] }.to_h
+  end
 
   ##
   # Class being heckled
@@ -163,6 +185,7 @@ class Heckle
 
     @count = 0
     @failures = []
+    @not_judged = Hash.new(0)
 
     @klass = resolve_class
     @name = @method_name.to_s.delete_prefix("self.").to_sym
@@ -301,6 +324,7 @@ class Heckle
   def validate
     @count = 0
     @failures = []
+    @not_judged = Hash.new(0)
 
     if mutations.empty? then
       @reporter.no_mutations(klass_name, method_name)
@@ -337,16 +361,21 @@ class Heckle
       end
     end
 
+    # The not judged counts only when there are some, so a reporter
+    # written for 3.0.0 sees the same calls as then.
+    totals = [@failures.size, @count]
+    totals << not_judged unless not_judged.empty?
+
     unless @failures.empty?
       @reporter.no_failures
       @failures.each do |failure|
         @reporter.failure(dedent(original_source), dedent(failure))
       end
-      @reporter.mutant_totals(@failures.size, @count)
+      @reporter.mutant_totals(*totals)
       false
     else
       @reporter.no_surviving_mutants
-      @reporter.mutant_totals(0, @count)
+      @reporter.mutant_totals(*totals)
       true
     end
   end
@@ -459,9 +488,21 @@ class Heckle
       puts "No mutants survived. Cool!\n\n"
     end
 
-    def mutant_totals(survived, total)
+    ##
+    # +not_judged+ is Heckle#not_judged, passed only when it is not empty.
+
+    def mutant_totals(survived, total, not_judged = {})
       puts "#{survived} of #{total} mutants survived"
+      puts Reporter.tally(not_judged) unless not_judged.empty?
       puts
+    end
+
+    ##
+    # Counts by reason as words, in NOT_JUDGED order: "2 timed out, 1 crashed".
+
+    def self.tally(not_judged)
+      NOT_JUDGED.select { |reason, _words| not_judged.fetch(reason, 0) > 0 }
+        .map { |reason, words| "#{not_judged[reason]} #{words}" }.join(", ")
     end
 
     def replacing(klass_name, method_name, original, src)
@@ -571,6 +612,7 @@ class Heckle
 
   # The mutant was neither killed by a failing test nor survived.
   def report_not_judged(reason, message)
+    @not_judged[reason] += 1
     @reporter.not_judged(reason, message, *@shown)
   end
 

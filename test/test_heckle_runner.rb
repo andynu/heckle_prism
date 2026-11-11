@@ -242,7 +242,8 @@ class TestHeckleRunner < Minitest::Test
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
     assert_equal "", run.err
     assert_includes run.out, TIMEOUT_WARNING
-    assert_includes run.out, "0 of 2 mutants survived"
+    assert_includes run.out, "0 of 2 mutants survived\n1 timed out\n\n"
+    assert_includes run.out, "Mutants   :   1 killed, 1 timed out, 0 survived\n"
     assert_equal 0, run.status.exitstatus
   end
 
@@ -256,7 +257,8 @@ class TestHeckleRunner < Minitest::Test
     assert_equal "", run.err
     assert_includes run.out, TIMEOUT_WARNING
     assert_includes run.out, "-  (@sheet.first..@sheet.last).each { rows += 1 }\n+  (nil..@sheet.last)"
-    assert_includes run.out, "1 of 2 mutants survived"
+    assert_includes run.out, "1 of 2 mutants survived\n1 timed out\n\n"
+    assert_includes run.out, "Mutants   :   0 killed, 1 timed out, 1 survived\n"
     assert_equal 1, run.status.exitstatus
   end
 
@@ -288,7 +290,8 @@ class TestHeckleRunner < Minitest::Test
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
     assert_equal "at_exit ran\n", run.err
     assert_includes run.out, TIMEOUT_WARNING
-    assert_includes run.out, "0 of 1 mutants survived"
+    assert_includes run.out, "0 of 1 mutants survived\n1 timed out\n\n"
+    assert_includes run.out, "Mutants   :   0 killed, 1 timed out, 0 survived\n"
     assert_equal 0, run.status.exitstatus
   end
 
@@ -307,8 +310,43 @@ class TestHeckleRunner < Minitest::Test
       refute run.killed, "heckle did not finish #{mode}; stdout:\n#{run.out}"
       assert_equal "", run.err
       assert_includes run.out, "1 mutations remaining...\n#{BANG}#{TALLY_TIMED_OUT}\nThe following mutations"
+      assert_match(/^ end\n\n1 of 2 mutants survived\n1 timed out\n\nHeckle Results:\n/, run.out)
+      assert_includes run.out, "Thick Skin:   0\nMutants   :   0 killed, 1 timed out, 1 survived\n\nImprove"
       assert_equal 1, run.status.exitstatus, mode
     end
+  end
+
+  # first is clean, initialize has nothing to mutate, and tally has a
+  # survivor and a timeout.
+  def test_whole_class_totals_with_a_timeout
+    [[], ["--fork"]].each do |mode|
+      run = bounded_heckle("Ledger", *LEDGER, *mode)
+
+      refute run.killed, "heckle did not finish #{mode}; stdout:\n#{run.out}"
+      assert_equal "", run.err
+      assert_equal ["0 of 1 mutants survived\n\n", "1 of 2 mutants survived\n1 timed out\n\n"],
+                   run.out.scan(/^\d+ of \d+ mutants survived\n(?:\d+ timed out\n)?\n/)
+      assert_includes run.out, "Ledger#initialize has a thick skin."
+      assert_includes run.out, <<~OUT
+        Heckle Results:
+
+        Passed    :   1
+        Failed    :   1
+        Thick Skin:   1
+        Mutants   :   1 killed, 1 timed out, 1 survived
+
+        Improve the tests and try again.
+      OUT
+      assert_equal 1, run.status.exitstatus, mode
+    end
+  end
+
+  def test_mutants_line
+    assert_equal "Mutants   :   5 killed, 0 survived", HeckleRunner.mutants_line(5, {}, 0)
+    assert_equal "Mutants   : 389 killed, 2 timed out, 81 survived",
+                 HeckleRunner.mutants_line(389, { timeout: 2 }, 81)
+    assert_equal "Mutants   : 1200 killed, 2 timed out, 1 crashed, 1 canceled, 3 survived",
+                 HeckleRunner.mutants_line(1200, { canceled: 1, timeout: 2, crash: 1 }, 3)
   end
 
   HOARDER = %w[Hoarder load -n call -t runaway/hoarder_test.rb].freeze
@@ -341,7 +379,9 @@ class TestHeckleRunner < Minitest::Test
     assert_equal "Memory limit set to 150 MB.", memory_limit_line(run.out)
     assert_includes run.out, "!!! The forked test run went over the memory limit of 150 MB and was killed. " \
                              "Not counted as a survivor.\n"
-    assert_includes run.out, "0 of 5 mutants survived"
+    assert_includes run.out, "-  (1..@rows.size).each { held << chunk }\n+  (1..nil).each { held << chunk }\n"
+    assert_includes run.out, "0 of 5 mutants survived\n1 ran out of memory\n\n"
+    assert_includes run.out, "Mutants   :   4 killed, 1 ran out of memory, 0 survived\n"
     assert_equal 0, run.status.exitstatus
   end
 

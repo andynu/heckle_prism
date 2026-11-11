@@ -551,6 +551,7 @@ class TestHeckle < Minitest::Test
       [:mutant_totals, 0, 2],
     ], reporter.calls
     assert_empty heckler.failures
+    assert_equal({}, heckler.not_judged)
     assert_equal 2, heckler.count
   end
 
@@ -682,7 +683,7 @@ class TestHeckle < Minitest::Test
     assert_equal [[:not_judged, :canceled, "Mutation canceled, hit ^C again to exit", PAIR, PAIR_FIRST]],
                  not_judged_calls(reporter)
     assert_equal [[2]], heckler.sleeps
-    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 0, 2, { canceled: 1 }], reporter.calls.last
     assert_equal threads, Thread.list.size
   end
 
@@ -788,6 +789,44 @@ class TestHeckle < Minitest::Test
     assert_equal 2, heckler.count
     assert_equal [[:not_judged, :syntax, "Mutation caused a syntax error:\n\nbad mutant", PAIR, PAIR_FIRST]],
                  not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 2, { syntax: 1 }], reporter.calls.last
+  end
+
+  # Reasons are counted per heckler run and listed in Heckle::NOT_JUDGED
+  # order, whatever order they happened in.
+  def test_not_judged_counts_each_reason
+    heckler = scripted("HeckleSubjects", "pair", [:lit]) do |h|
+      raise SyntaxError, "bad mutant" if h.count == 1
+      sleep 5
+    end
+
+    with_timeout(0.3) { heckler.validate }
+
+    assert_equal [[:timeout, 1], [:syntax, 1]], heckler.not_judged.to_a
+    heckler.script = ->(_h) { false }
+    heckler.validate
+    assert_equal({}, heckler.not_judged)
+  end
+
+  def test_not_judged_reasons_and_their_words
+    assert_equal({ timeout: "timed out", memory: "ran out of memory", crash: "crashed",
+                   install: "failed to install", syntax: "had a syntax error", canceled: "canceled" },
+                 Heckle::NOT_JUDGED)
+    assert_equal "", Heckle::Reporter.tally({})
+    assert_equal "2 timed out", Heckle::Reporter.tally({ timeout: 2 })
+    assert_equal "2 timed out, 1 crashed, 3 canceled",
+                 Heckle::Reporter.tally({ canceled: 3, crash: 1, timeout: 2, memory: 0 })
+  end
+
+  def test_reporter_totals_add_a_line_for_mutants_not_judged
+    reporter = Heckle::Reporter.new
+
+    assert_output("1 of 4 mutants survived\n\n") { reporter.mutant_totals(1, 4) }
+    assert_output("1 of 4 mutants survived\n\n") { reporter.mutant_totals(1, 4, {}) }
+    assert_output("1 of 4 mutants survived\n2 timed out\n\n") { reporter.mutant_totals(1, 4, { timeout: 2 }) }
+    assert_output("0 of 4 mutants survived\n1 ran out of memory, 1 had a syntax error\n\n") do
+      reporter.mutant_totals(0, 4, { syntax: 1, memory: 1 })
+    end
   end
 
   # The Reporter warns in the words the warning always used, then shows
@@ -913,7 +952,7 @@ class TestHeckle < Minitest::Test
     refute_includes out, "mutants survived"
   end
 
-  def test_totals_count_a_timed_out_mutant_as_killed
+  def test_totals_count_a_timed_out_mutant_as_not_judged
     reporter = RecordingReporter.new
     heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) do |h|
       sleep 5 if h.count == 1
@@ -922,7 +961,19 @@ class TestHeckle < Minitest::Test
 
     with_timeout(0.5) { heckler.validate }
 
-    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 1, 2, { timeout: 1 }], reporter.calls.last
+    assert_equal({ timeout: 1 }, heckler.not_judged)
+  end
+
+  def test_real_reporter_totals_with_a_timeout
+    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) do |h|
+      sleep 5 if h.count == 1
+      false
+    end
+
+    out, _err = with_timeout(0.5) { capture_io { heckler.validate } }
+
+    assert out.end_with?("No mutants survived. Cool!\n\n0 of 2 mutants survived\n1 timed out\n\n"), out
   end
 
   def test_real_reporter_thick_skin_names_the_class
@@ -959,7 +1010,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_public_surface
-    %i[count klass klass_name method_name failures].each do |name|
+    %i[count klass klass_name method_name failures not_judged].each do |name|
       assert Heckle.public_method_defined?(name), "#{name} should be public"
     end
     %i[count= klass= klass_name= method_name=].each do |name|
@@ -1465,7 +1516,7 @@ class TestHeckle < Minitest::Test
                    "The forked test run went over the memory limit of #{limit / MB} MB " \
                    "and was killed. Not counted as a survivor.", PAIR, PAIR_FIRST]],
                  not_judged_calls(reporter)
-    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 0, 2, { memory: 1 }], reporter.calls.last
     assert_equal original, HeckleSubjects.instance_method(:pair)
     assert_reaped heckler.pids
   end
@@ -1477,6 +1528,7 @@ class TestHeckle < Minitest::Test
     assert_equal true, with_fork { heckler.validate }
     assert_equal [[:not_judged, :memory, "The forked test run ran out of memory. Not counted as a survivor.",
                    ANSWER, ANSWER_MUTANT]], not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 1, { memory: 1 }], reporter.calls.last
     assert_empty heckler.failures
     assert_reaped heckler.pids
   end
@@ -1590,6 +1642,7 @@ class TestHeckle < Minitest::Test
                  calls.map { |call| call.values_at(1, 3, 4) }
     assert_match(/\AMutation caused a syntax error:\n\n.*heckle_subjects\.rb:\d+: syntax error/, calls[0][2])
     refute_includes reporter.names, :warning
+    assert_equal [:mutant_totals, 0, 2, { syntax: 2 }], reporter.calls.last
     assert_empty heckler.failures
     assert_reaped heckler.pids
   end
@@ -1602,6 +1655,7 @@ class TestHeckle < Minitest::Test
     assert_equal [[:not_judged, :install,
                    "Installing the mutant raised an exception in the forked child. Not counted as a survivor.",
                    ANSWER, ANSWER_MUTANT]], not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 1, { install: 1 }], reporter.calls.last
     assert_empty heckler.failures
     assert_reaped heckler.pids
   end
@@ -1614,7 +1668,7 @@ class TestHeckle < Minitest::Test
     assert_equal true, with_fork { heckler.validate }
     assert_equal [[:not_judged, :crash, "The tests raised an exception in the forked child. Not counted as a survivor.",
                    ANSWER, ANSWER_MUTANT]], not_judged_calls(reporter)
-    assert_equal [:mutant_totals, 0, 1], reporter.calls.last
+    assert_equal [:mutant_totals, 0, 1, { crash: 1 }], reporter.calls.last
     assert_equal original, HeckleSubjects.instance_method(:answer)
     assert_reaped heckler.pids
   end
@@ -1626,6 +1680,7 @@ class TestHeckle < Minitest::Test
     assert_equal true, with_fork { heckler.validate }
     assert_equal [[:not_judged, :crash, "The forked test run ended with exit status 0. Not counted as a survivor.",
                    ANSWER, ANSWER_MUTANT]], not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 1, { crash: 1 }], reporter.calls.last
     assert_empty heckler.failures
   end
 
@@ -1645,7 +1700,7 @@ class TestHeckle < Minitest::Test
     assert_equal [[:not_judged, :crash, "The forked test run was killed by signal KILL. Not counted as a survivor.",
                    PAIR, PAIR_FIRST]], not_judged_calls(reporter)
     assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
-    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 1, 2, { crash: 1 }], reporter.calls.last
     assert_equal original, HeckleSubjects.instance_method(:pair)
     assert_equal [1, 2], HeckleSubjects.new.pair
     assert_reaped heckler.pids
@@ -1667,7 +1722,7 @@ class TestHeckle < Minitest::Test
     assert_equal %i[TERM], heckler.signals
     assert_equal [[:not_judged, :timeout, TIMED_OUT, PAIR, PAIR_FIRST]], not_judged_calls(reporter)
     assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
-    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 1, 2, { timeout: 1 }], reporter.calls.last
     assert_equal original, HeckleSubjects.instance_method(:pair)
     assert_reaped heckler.pids
   end
@@ -1759,6 +1814,7 @@ class TestHeckle < Minitest::Test
 
     assert_equal %i[TERM KILL], heckler.signals
     assert_equal [[:not_judged, :timeout, TIMED_OUT, ANSWER, ANSWER_MUTANT]], not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 1, { timeout: 1 }], reporter.calls.last
     assert_reaped heckler.pids
   ensure
     reader&.close
@@ -1790,7 +1846,7 @@ class TestHeckle < Minitest::Test
     assert_equal [[:not_judged, :canceled, "Mutation canceled, hit ^C again to exit", PAIR, PAIR_FIRST]],
                  not_judged_calls(reporter)
     assert_equal [[2]], heckler.sleeps
-    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal [:mutant_totals, 0, 2, { canceled: 1 }], reporter.calls.last
     assert_equal original, HeckleSubjects.instance_method(:pair)
     assert_reaped heckler.pids
   ensure

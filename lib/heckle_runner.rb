@@ -128,6 +128,17 @@ class HeckleRunner
     options
   end
 
+  ##
+  # The summary's mutant counts, which add up to the mutants run. Mutants
+  # not judged appear by reason, between killed and survived, only when
+  # there are some.
+
+  def self.mutants_line killed, not_judged, survived
+    judged_not = Heckle::Reporter.tally(not_judged)
+    judged_not += ", " unless judged_not.empty?
+    "Mutants   : %3d killed, %s%d survived" % [killed, judged_not, survived]
+  end
+
   def self.canonical nodes
     nodes.map { |node| Heckle::NODE_ALIASES.fetch(node, node) }
   end
@@ -159,10 +170,12 @@ class HeckleRunner
 
     counts = Hash.new(0)
     survived = killed = 0
+    not_judged = Hash.new(0)
     hecklers.each do |heckler|
       counts[heckler.validate] += 1
       survived += heckler.failures.size
-      killed += heckler.count - heckler.failures.size
+      heckler.not_judged.each { |reason, count| not_judged[reason] += count }
+      killed += heckler.count - heckler.failures.size - heckler.not_judged.values.sum
     end
     all_good = counts[false] == 0
 
@@ -171,7 +184,7 @@ class HeckleRunner
     puts "Passed    : %3d" % counts[true]
     puts "Failed    : %3d" % counts[false]
     puts "Thick Skin: %3d" % counts[nil]
-    puts "Mutants   : %3d killed, %d survived" % [killed, survived]
+    puts self.class.mutants_line(killed, not_judged, survived)
     puts
 
     if all_good then
