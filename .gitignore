@@ -1,2 +1,3 @@
 .idea/
 tags
+test/fixtures/consumer_project/Gemfile.lock
