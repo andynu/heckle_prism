@@ -219,13 +219,23 @@ class Heckle
       executor = Minitest.parallel_executor
       executor.start if executor.respond_to?(:start)
       reporter.start
-      Minitest.run_all_suites(reporter, options)
+      run_all_suites(reporter, options)
       executor.shutdown if executor.respond_to?(:shutdown)
       reporter.report
 
       reporter.passed?
     end
   end
+
+  # Minitest 6 renamed Minitest.__run to Minitest.run_all_suites.
+  def self.run_all_suites(reporter, options)
+    if Minitest.respond_to?(:run_all_suites)
+      Minitest.run_all_suites(reporter, options)
+    else
+      Minitest.__run(reporter, options)
+    end
+  end
+  private_class_method :run_all_suites
 
   def self.quietly
     return yield if @@debug
