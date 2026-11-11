@@ -274,6 +274,61 @@ class TestTestsPass < Minitest::Test
     assert_includes run.err, "--fork"
   end
 
+  # A worker that cannot be killed (here it holds off interrupts, as a
+  # thread inside one long C call does) may go on running the mutant
+  # beside the next mutant's tests, so heckle no longer vouches for them.
+  def test_settle_records_a_worker_it_cannot_stop
+    run = drive_bounded(<<~'RUBY')
+      $hold = true
+      class HeldTest < Minitest::Test
+        parallelize_me!
+
+        def test_hold
+          Thread.handle_interrupt(Object => :never) { sleep 0.01 while $hold }
+        end
+      end
+      p Heckle.unsettled
+      begin
+        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
+      rescue Heckle::Timeout
+        puts "stopped"
+      end
+      Heckle.settle
+      puts Heckle.unsettled
+      $hold = false
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal ["", "nil\nstopped\na test thread of an earlier mutant's run could not be stopped " \
+                      "and may still be running\nruns=1\n"], [run.err, run.out]
+  end
+
+  def test_settle_records_a_teardown_that_runs_over
+    run = drive_bounded(<<~'RUBY')
+      class SlowTeardownTest < Minitest::Test
+        def teardown
+          sleep 5
+        end
+
+        def test_spin
+          loop {}
+        end
+      end
+      Heckle.timeout = 1
+      begin
+        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
+      rescue Heckle::Timeout
+        puts "stopped"
+      end
+      Heckle.settle
+      puts Heckle.unsettled
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal ["", "stopped\nthe teardown of SlowTeardownTest#test_spin, which heckle ran after its test " \
+                      "was stopped, did not finish within the 1 second timeout\nruns=1\n"], [run.err, run.out]
+  end
+
   def test_settle_without_a_stopped_run_does_nothing
     assert_drive "true\nnil\ntrue\nruns=3\n", <<~RUBY
       Heckle.load_tests(Dir.glob("test/test_*.rb"))

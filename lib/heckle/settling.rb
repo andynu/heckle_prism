@@ -7,6 +7,21 @@ class Heckle
 
   @@abandoned_executor = nil
   @@stopped_test = nil
+  @@unsettled = nil
+
+  ##
+  # Why settle could not clean up after a stopped run, or nil. Once set
+  # it stays set: no later mutant is run in this process, since its
+  # outcome could be the earlier mutant's doing.
+
+  def self.unsettled
+    @@unsettled
+  end
+
+  def self.unsettle(reason)
+    @@unsettled ||= reason
+  end
+  private_class_method :unsettle
 
   ##
   # Cleans up after a test run that an exception (a timeout, ^C) ended,
@@ -55,7 +70,8 @@ class Heckle
       end
     end
   rescue Heckle::Timeout
-    nil
+    unsettle "the teardown of #{test.class}##{test.name}, which heckle ran after its test was stopped, " \
+             "did not finish within the #{@@timeout} second timeout"
   end
   private_class_method :finish
 
@@ -91,7 +107,11 @@ class Heckle
     end
     running = still_running(Array(executor.instance_variable_get(:@pool)))
     running.each(&:kill)
-    still_running(running)
+    return if still_running(running).empty?
+
+    # Left running: Thread#kill waits for it to leave C code or a
+    # handle_interrupt block, which may be never.
+    unsettle "a test thread of an earlier mutant's run could not be stopped and may still be running"
   end
   private_class_method :retire
 

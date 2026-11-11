@@ -388,6 +388,25 @@ class TestHeckleRunner < Minitest::Test
     assert_judged_after_a_timeout(run, "teardown")
   end
 
+  # The teardown heckle runs after the timeout runs over too, so the
+  # process may still hold its test's state: the later mutants are not
+  # run in-process, and --fork judges them.
+  def test_mutants_after_a_teardown_that_runs_over_are_not_run
+    args = ["Relay", "pass_on", "-n", "call", "-T", "1", "-t", "runaway/slow_teardown_relay_test.rb"]
+    run = bounded_heckle(*args)
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_equal 2, run.out.scan("!!! Not run: the teardown of SlowTeardownRelayTest#test_pass_on, which heckle " \
+                                 "ran after its test was stopped, did not finish within the 1 second timeout.").size
+    assert_includes run.out, "run heckle with --fork to judge it.\n#{BANG}\n--- original\n"
+    assert_includes run.out, "0 of 3 mutants survived\n1 timed out, 2 not run\n\n"
+    assert_includes run.out, "Mutants   :   0 killed, 1 timed out, 2 not run, 0 survived\n"
+    assert_equal 0, run.status.exitstatus
+
+    assert_judged_after_a_timeout(bounded_heckle(*args, "--fork"), "fork")
+  end
+
   # In fork mode a mutant over the memory limit is killed and the run goes
   # on; gather's later mutants are four survivors and a kill.
   def test_mutants_after_a_memory_kill_are_judged_on_their_own

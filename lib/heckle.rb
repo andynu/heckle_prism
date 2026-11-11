@@ -56,6 +56,7 @@ class Heckle
     install: "failed to install",
     syntax: "had a syntax error",
     canceled: "canceled",
+    unsettled: "not run",
   }.freeze
 
   ##
@@ -351,6 +352,9 @@ class Heckle
         @count += 1
         if @@fork then
           run_forked mutation
+        elsif Heckle.unsettled
+          report_not_judged :unsettled, "Not run: #{Heckle.unsettled}. Heckle cannot judge a mutant in " \
+                                        "this process any more; run heckle with --fork to judge it."
         else
           reports = [swallowed_timeout_report, memory_report]
           install mutation
@@ -484,8 +488,9 @@ class Heckle
     # A mutant the tests neither failed against nor passed against.
     # +reason+ is :timeout, :memory (fork mode), :crash (the forked child
     # raised, died by a signal or exited oddly), :install (installing it
-    # raised in the forked child), :syntax or :canceled (^C). +message+
-    # is the warning, +original+ and +mutant+ the dedented sources.
+    # raised in the forked child), :syntax, :canceled (^C) or :unsettled
+    # (not run, see Heckle.unsettled). +message+ is the warning,
+    # +original+ and +mutant+ the dedented sources.
 
     def not_judged(reason, message, original, mutant)
       warning message

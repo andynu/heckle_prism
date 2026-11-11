@@ -808,9 +808,46 @@ class TestHeckle < Minitest::Test
     assert_equal({}, heckler.not_judged)
   end
 
+  def with_unsettled(reason)
+    saved = Heckle.class_variable_get(:@@unsettled)
+    Heckle.class_variable_set(:@@unsettled, reason)
+    yield
+  ensure
+    Heckle.class_variable_set(:@@unsettled, saved)
+  end
+
+  # Once settle could not clean up after a run, no later mutant in the
+  # process is run in-process, since its outcome could be the earlier
+  # mutant's doing.
+  def test_unsettled_process_runs_no_more_mutants_in_process
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) { flunk "no run expected" }
+
+    result = with_unsettled("a test thread could not be stopped") { heckler.validate }
+
+    assert_equal true, result
+    message = "Not run: a test thread could not be stopped. Heckle cannot judge a mutant in this " \
+              "process any more; run heckle with --fork to judge it."
+    assert_equal [[:not_judged, :unsettled, message, PAIR, PAIR_FIRST],
+                  [:not_judged, :unsettled, message, PAIR, PAIR_SECOND]], not_judged_calls(reporter)
+    assert_equal [:mutant_totals, 0, 2, { unsettled: 2 }], reporter.calls.last
+    assert_equal [1, 2], HeckleSubjects.new.pair
+  end
+
+  def test_unsettled_parent_still_runs_forked_mutants
+    heckler = forked("HeckleSubjects", "pair", [:lit]) { |h| h.count == 1 }
+
+    result = with_unsettled("a test thread could not be stopped") { with_fork { heckler.validate } }
+
+    assert_equal false, result
+    assert_equal({}, heckler.not_judged)
+    assert_reaped heckler.pids
+  end
+
   def test_not_judged_reasons_and_their_words
     assert_equal({ timeout: "timed out", memory: "ran out of memory", crash: "crashed",
-                   install: "failed to install", syntax: "had a syntax error", canceled: "canceled" },
+                   install: "failed to install", syntax: "had a syntax error", canceled: "canceled",
+                   unsettled: "not run" },
                  Heckle::NOT_JUDGED)
     assert_equal "", Heckle::Reporter.tally({})
     assert_equal "2 timed out", Heckle::Reporter.tally({ timeout: 2 })
