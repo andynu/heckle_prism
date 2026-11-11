@@ -329,7 +329,7 @@ class TestHeckleRunner < Minitest::Test
   def test_help
     out, _err, status = heckle("--help")
 
-    %w[--verbose --tests --force --assignments --branches --timeout --nodes --exclude-nodes].each do |flag|
+    %w[--verbose --tests --force --assignments --branches --timeout --nodes --exclude-nodes --fork].each do |flag|
       assert_includes out, flag
     end
     refute_includes out, "--focus"
@@ -346,13 +346,77 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, status.exitstatus
   end
 
+  # The same commands with and without --fork give the same output once
+  # the random replacements are removed: they appear only on the
+  # mutation side of a survivor's diff.
+  def strip_replacements(out)
+    out.gsub(/^\+(?!\+\+ ).*$/, "+")
+  end
+
+  FORK_COMMANDS = [
+    %w[Doubler double],
+    ["Doubler", "double", *PARTIAL],
+    ["Doubler", *PARTIAL],
+    ["Tally", *TALLY],
+    %w[Halver -t test/units/*_test.rb],
+    %w[Money -t test/money_test.rb],
+    %w[Doubler double --force --tests broken/broken_doubler_test.rb],
+    %w[Gauge],
+  ].freeze
+
+  def test_fork_output_matches_in_process
+    FORK_COMMANDS.each do |args|
+      out, err, status = heckle(*args)
+      fork_out, fork_err, fork_status = heckle(*args, "--fork")
+
+      assert_equal [strip_replacements(out), err, status.exitstatus],
+                   [strip_replacements(fork_out), fork_err, fork_status.exitstatus], args.join(" ")
+    end
+  end
+
+  def test_fork_survivor_and_exit_status
+    out, err, status = heckle("Halver", "-t", "test/units/*_test.rb", "--fork")
+
+    assert_equal "", err
+    assert_includes out, "-  x / 4\n"
+    assert_includes out, "Mutants   :   2 killed, 2 survived\n"
+    assert_equal 1, status.exitstatus
+  end
+
+  def test_fork_unsupported_aborts
+    script = "class << Process; undef_method :fork; end; load #{BIN.dump}"
+    out, err, status = Open3.capture3(RbConfig.ruby, "-e", script, "Doubler", "double", "--fork", chdir: PROJECT)
+
+    refute status.success?
+    assert_equal ["--fork needs Process.fork, which this Ruby does not have"], err.lines.map(&:chomp)
+    assert_equal "", out
+  end
+
   # parse_args sets Heckle's global configuration.
   def parse(*args)
-    saved = %i[@@debug @@timeout @@guess_timeout].map { |name| Heckle.class_variable_get(name) }
+    saved = %i[@@debug @@timeout @@guess_timeout @@fork].map { |name| Heckle.class_variable_get(name) }
     out, _err = capture_io { @options = HeckleRunner.parse_args(args) }
     [@options, args, out]
   ensure
-    %i[@@debug @@timeout @@guess_timeout].zip(saved) { |name, value| Heckle.class_variable_set(name, value) }
+    %i[@@debug @@timeout @@guess_timeout @@fork].zip(saved) { |name, value| Heckle.class_variable_set(name, value) }
+  end
+
+  def test_parse_args_fork
+    options, rest, out = parse("--fork", "Doubler")
+
+    assert_equal true, options[:fork]
+    assert_equal %w[Doubler], rest
+    assert_equal "", out
+  end
+
+  def test_parse_args_fork_sets_heckle
+    saved = Heckle.fork?
+    capture_io { HeckleRunner.parse_args(%w[--fork]) }
+    assert_equal true, Heckle.fork?
+    capture_io { HeckleRunner.parse_args(%w[Doubler]) }
+    assert_equal false, Heckle.fork?
+  ensure
+    Heckle.fork = saved
   end
 
   def test_parse_args_defaults
@@ -364,6 +428,7 @@ class TestHeckleRunner < Minitest::Test
     assert_equal false, options[:force]
     assert_equal false, options[:debug]
     assert_nil options[:timeout]
+    refute options.key?(:fork)
     refute options.key?(:focus)
     assert_equal "", out
   end

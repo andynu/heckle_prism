@@ -6,6 +6,7 @@ require "heckle/version"
 require "heckle/method_finder"
 require "heckle/mutation"
 require "heckle/mutator"
+require "heckle/forking"
 
 ##
 # Test Unit Sadism
@@ -77,6 +78,7 @@ class Heckle
   @@debug = false
   @@guess_timeout = true
   @@timeout = 60 # default to something longer (can be overridden by runners)
+  @@fork = false
 
   def self.debug
     @@debug
@@ -97,6 +99,17 @@ class Heckle
 
   def self.guess_timeout?
     @@guess_timeout
+  end
+
+  ##
+  # True when validate runs each mutant in a forked child.
+
+  def self.fork?
+    @@fork
+  end
+
+  def self.fork=(value)
+    @@fork = value
   end
 
   ##
@@ -180,12 +193,14 @@ class Heckle
   # is preserved.
 
   def install(mutation)
+    # Built while the original method is live: heckling Heckle itself
+    # replaces methods that building the source calls.
+    source, line = install_source(mutation)
+
     remove_live_method
     # Set before the eval, so restore puts the original back if it raises.
     @installed = true
-    prelude = magic_comments
-    eval(prelude + wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file,
-         def_node.location.start_line - prelude.count("\n"))
+    eval(source, TOPLEVEL_BINDING, @file, line)
     @owner.send(@visibility, @name)
   end
 
@@ -265,7 +280,8 @@ class Heckle
   # Runs the tests against each mutant in turn. Returns nil when there is
   # nothing to mutate, true when every mutant was killed, false otherwise.
   # Any exception other than SyntaxError, a timeout or Interrupt propagates,
-  # with the original method restored.
+  # with the original method restored. In fork mode the tests' exceptions
+  # stay in the child, which is warned about and not counted a survivor.
 
   def validate
     @count = 0
@@ -280,16 +296,21 @@ class Heckle
 
     mutations.each_with_index do |mutation, index|
       @reporter.remaining_mutations(mutations.size - index)
-      @current_mutation = mutation
+      # Survivor text is taken before install, for the same reason as there.
+      @current_mutant = mutant_source(mutation)
       begin
         if @@debug
           @reporter.replacing(klass_name, method_name,
-                              dedent(original_source), dedent(mutant_source(mutation)))
+                              dedent(original_source), dedent(@current_mutant))
         end
 
         @count += 1
-        install mutation
-        ::Timeout::timeout(@@timeout, Heckle::Timeout) { run_tests }
+        if @@fork then
+          run_forked mutation
+        else
+          install mutation
+          ::Timeout::timeout(@@timeout, Heckle::Timeout) { run_tests }
+        end
       rescue SyntaxError => e
         @reporter.warning "Mutation caused a syntax error:\n\n#{e.message}"
       rescue Heckle::Timeout
@@ -445,7 +466,7 @@ class Heckle
   end
 
   def record_passing_mutation
-    @failures << mutant_source(@current_mutation)
+    @failures << @current_mutant
   end
 
   def def_node
@@ -518,6 +539,12 @@ class Heckle
       .select { |comment| comment.key == "frozen_string_literal" }
       .select { |comment| comment.key_loc.start_offset < first_token }
       .last&.value
+  end
+
+  # The source install evaluates for +mutation+, and its first line.
+  def install_source(mutation)
+    prelude = magic_comments
+    [prelude + wrapped(mutant_source(mutation)), def_node.location.start_line - prelude.count("\n")]
   end
 
   # One line per comment; install starts the eval that many lines earlier.

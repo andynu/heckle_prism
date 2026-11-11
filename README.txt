@@ -18,6 +18,25 @@ It's like hiring a white-hat hacker to try to break into your server and making 
 * Private and protected methods keep their visibility while mutated.
 * Each mutant is evaluated inside the method's original module and class
   nesting, so constant lookup behaves as it does in your file.
+* Classes defined by a block are heckled like any other. A constant
+  assigned a method call with a literal block is treated as a class body
+  named by that constant:
+
+      Point = Data.define(:x, :y) do ... end
+      Pair = Struct.new(:a, :b) { ... }
+      Child = Class.new(Parent) do ... end
+      Helpers = Module.new do ... end
+      A::B = Struct.new(:v) do ... end
+
+  Any call counts, whatever its receiver or name. Instance methods, "def
+  self.name" and "class << self" in the block all work. The mutant is
+  evaluated with class_eval inside the enclosing nesting, so a constant
+  named in the method resolves as it does in the block, from the
+  enclosing module first. A class or module keyword inside such a block
+  defines a constant of the enclosing scope, so its methods are not
+  found under the block-defined class's name.
+* With --fork, each mutant runs in a forked child process and the heckle
+  process itself never loads a mutant. See FORK MODE below.
 * Tests are plain Minitest, run in-process. Other test frameworks are not
   supported.
 * Mutation kinds (the names the -n and -x flags take):
@@ -63,6 +82,7 @@ Main options:
     -T, --timeout SECS   time limit per test run; without it the limit is
                          twice the unmutated run, at least 5 seconds
     -F, --force          go on even if the unmutated tests fail
+        --fork           run each mutant in a forked child process
     -v, --verbose        show each mutant and the test output
 
 For example, to heckle only the branches of one method against one test
@@ -148,12 +168,14 @@ Known limits:
 
 * Only methods written with def are heckled. Methods made by
   define_method, attr_accessor, class_attribute and similar are skipped.
-* Mutants run inside the heckle process. Tests that start a subprocess
-  (a system call, a forked server) run the original code, not the
-  mutant, so they cannot catch it.
+* Mutants run inside the heckle process, or with --fork inside its
+  child. Tests that start a new program (a system call, a spawned
+  server) run the original code, not the mutant, so they cannot catch
+  it.
 * A mutant can change state that outlives one test run, such as a
   global, a class variable or a cache, and that change is seen by the
-  runs of later mutants.
+  runs of later mutants. With --fork it is not, since each mutant's
+  changes end with its child process.
 * Equivalent mutants are reported like any other survivor. A mutant
   that changes the code without changing what the method does cannot be
   caught by any test, and heckle cannot tell it apart from a gap in the
@@ -174,6 +196,60 @@ Known limits:
   constants, such as a hash of regexes or a lookup table, is never
   changed, even when the methods that use it are heckled. A survivor
   count of zero says nothing about whether the tests check that data.
+
+== FORK MODE:
+
+    % bundle exec heckle Widget --fork
+
+Fork mode is off unless --fork is given. Without the flag heckle runs
+as described above.
+
+With --fork, heckle forks a child process for each mutant. The child
+loads the mutant, runs the loaded tests and ends with exit!, so no
+at_exit handler (Minitest's, SimpleCov's, a database cleanup) runs in
+it. The child reports the outcome only through its exit status. The
+heckle process prints the results, survivor diffs, totals and summary
+itself, the same as without --fork, and never loads a mutant, so a
+mutant cannot change state that later mutants or heckle itself see.
+
+The timeout applies to the child. When a child runs over, heckle sends
+it TERM, then KILL a second later, and prints the usual timeout
+warning. ^C in heckle stops the child too. A child that ends any other
+way (an exception out of the test run, an unexpected exit status, a
+signal) gets a warning, and its mutant is counted as killed, never as
+survived. Fork mode needs Process.fork; on a Ruby without it, such as
+Ruby on Windows, heckle stops with a one-line message.
+
+Use it when the code under test or its tests keep state from one test
+run to the next (globals, class variables, memoized caches,
+registries), since without --fork that state carries from one mutant's
+run into the next; when a mutant could leave the process broken, for
+example by changing something Minitest or heckle uses; and when
+heckling heckle (below). Each mutant costs a fork on top of its test
+run. On the Rails application mentioned above, one model's 15 mutants
+took about 1.45 seconds with --fork and 1.15 seconds without.
+
+Databases. In Rails 8.1 (read in the 8.1.4.1 source), Active Record
+registers a callback with ActiveSupport::ForkTracker that discards
+every connection pool in a forked child without closing the parent's
+connections, so each child opens a connection of its own. For
+PostgreSQL the child points the inherited socket at /dev/null instead
+of closing it; for SQLite nothing is done. On that Rails 8.1
+application with SQLite, --fork reported the same survivors as a run
+without it, left the row counts of the test database unchanged, left
+no processes behind and did not touch the coverage directory.
+PostgreSQL, MySQL and other database servers have not been tried. With
+one, each mutant opens a new connection to the server.
+
+Heckling heckle. In the child, the code that decides whether the tests
+passed runs after the mutant is loaded. So when heckle heckles its own
+methods, a mutant of a method on that path judges itself, and its
+result says nothing. Those methods are Heckle#tests_pass?,
+Heckle.tests_pass?, Heckle.quietly and Heckle.run_all_suites, and any
+tests_pass? a subclass defines. Their mutants still run; treat what
+heckle reports for them as unknown. The other methods are judged by
+unmutated code: install is already running when its mutant replaces
+it, and the outcome is read in the parent.
 
 == REQUIREMENTS:
 

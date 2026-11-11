@@ -83,6 +83,15 @@ class HeckleRunner
         options[:timeout] = timeout
       end
 
+      opts.on("--fork", "Run each mutant in a forked child",
+              "The heckle process never loads a mutant") do
+        unless Process.respond_to?(:fork)
+          raise Error, "--fork needs Process.fork, which this Ruby does not have"
+        end
+
+        options[:fork] = true
+      end
+
       opts.on("-n", "--nodes NODES", "Nodes to mutate",
               "Possible values: #{Heckle::MUTATABLE_NODES.join(',')}") do |opt|
         nodes = opt.split(',').collect {|n| n.to_sym }
@@ -103,6 +112,8 @@ class HeckleRunner
 
     Heckle.debug = options[:debug]
     Heckle.timeout = options[:timeout] if options[:timeout]
+    # Absent unless given, so -v prints the options as without the flag.
+    Heckle.fork = options.fetch(:fork, false)
 
     options
   end
