@@ -60,6 +60,18 @@ module HeckleNesting
     def limit
       LIMIT + 1
     end
+
+    # String and heredoc content lines indented less than the def.
+    def letter(name)
+      if name
+        heading = "Dear
+  #{name},"
+      end
+      <<-TEXT
+#{heading}
+  thanks
+      TEXT
+    end
   end
 end
 

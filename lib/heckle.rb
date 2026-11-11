@@ -280,7 +280,8 @@ class Heckle
       @current_mutation = mutation
       begin
         if @@debug
-          @reporter.replacing(klass_name, method_name, original_source, mutant_source(mutation))
+          @reporter.replacing(klass_name, method_name,
+                              dedent(original_source), dedent(mutant_source(mutation)))
         end
 
         self.count += 1
@@ -301,7 +302,7 @@ class Heckle
     unless @failures.empty?
       @reporter.no_failures
       @failures.each do |failure|
-        @reporter.failure(original_source, failure)
+        @reporter.failure(dedent(original_source), dedent(failure))
       end
       false
     else
@@ -423,6 +424,16 @@ class Heckle
 
   def def_node
     @found.def_node
+  end
+
+  # For display only. Strips the def line's leading whitespace from each
+  # later line that starts with it; other lines (string or heredoc content
+  # indented less than the def) are left as they are.
+  def dedent(source)
+    indent = def_node.location.start_line_slice[/\A[ \t]*/]
+    return source if indent.empty?
+
+    source.gsub(/\n#{Regexp.escape(indent)}/, "\n")
   end
 
   def not_found(reason)

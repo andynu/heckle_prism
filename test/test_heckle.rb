@@ -277,7 +277,68 @@ class TestHeckle < Minitest::Test
     assert_equal false, heckler.validate
     assert_equal [survivor], heckler.failures
     assert_equal [:no_failures, :failure], reporter.names.last(2)
-    assert_equal [:failure, "def pair\n    [1, 2]\n  end", survivor], reporter.calls.last
+    assert_equal [:failure, "def pair\n  [1, 2]\nend", "def pair\n  [6, 2]\nend"], reporter.calls.last
+  end
+
+  LETTER = [
+    'def letter(name)',
+    '      %s name',
+    '        heading = "Dear',
+    '  #{name},"',
+    '      end',
+    '      <<-TEXT',
+    '#{heading}',
+    '  thanks',
+    '      TEXT',
+    '    end',
+  ].join("\n")
+
+  LETTER_SHOWN = [
+    'def letter(name)',
+    '  %s name',
+    '    heading = "Dear',
+    '  #{name},"',
+    '  end',
+    '  <<-TEXT',
+    '#{heading}',
+    '  thanks',
+    '  TEXT',
+    'end',
+  ].join("\n")
+
+  def test_reported_survivor_is_dedented_and_failures_keep_mutant_source
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleNesting::Inner", "letter", [:if], reporter) { true }
+
+    assert_equal false, heckler.validate
+    assert_equal [LETTER % "unless"], heckler.failures
+    assert_equal [:failure, LETTER_SHOWN % "if", LETTER_SHOWN % "unless"], reporter.calls.last
+  end
+
+  def test_debug_replacement_is_dedented
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleNesting::Inner", "letter", [:if], reporter) { false }
+    debug = Heckle.debug
+    Heckle.debug = true
+
+    heckler.validate
+
+    replacing = reporter.calls.find { |call| call.first == :replacing }
+    assert_equal [:replacing, "HeckleNesting::Inner", :letter,
+                  LETTER_SHOWN % "if", LETTER_SHOWN % "unless"], replacing
+  ensure
+    Heckle.debug = debug
+  end
+
+  def test_dedent_uses_the_def_line_indentation
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "guarded_answer", [:lit], reporter) { true }
+
+    heckler.validate
+
+    assert_equal ["def guarded_answer\n    47\n  end"], heckler.failures
+    assert_equal [:failure, "def guarded_answer\n  42\nend", "def guarded_answer\n  47\nend"],
+                 reporter.calls.last
   end
 
   def test_tests_run_against_installed_mutant
@@ -359,8 +420,7 @@ class TestHeckle < Minitest::Test
     assert_includes out, "1 mutations remaining...\n"
     assert_includes out, "The following mutations didn't cause test failures:\n"
     assert_includes out, "--- original\n+++ mutation\n"
-    assert_includes out, "\n-    [1, 2]\n"
-    assert_includes out, "\n+    [6, 2]\n"
+    assert_includes out, "\n def pair\n-  [1, 2]\n+  [6, 2]\n end\n"
   end
 
   def test_install_and_restore_are_silent_under_verbose

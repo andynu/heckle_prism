@@ -50,7 +50,7 @@ class TestHeckleRunner < Minitest::Test
     assert_equal "", err
     assert_includes out, "The following mutations didn't cause test failures:"
     assert_includes out, "--- original\n+++ mutation\n"
-    assert_includes out, "\n-      \"NaN\"\n"
+    assert_includes out, "\n def double x\n   if Numeric === x\n     x * 2\n   else\n-    \"NaN\"\n"
     refute_includes out, "No mutants survived."
     assert_equal 1, status.exitstatus
   end
