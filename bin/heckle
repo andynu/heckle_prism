@@ -10,4 +10,8 @@ end
 
 require 'heckle_runner'
 
+# Unbuffered, so results keep their place among stderr lines (warnings,
+# aborts) when both streams go to one file or pipe.
+$stdout.sync = true
+
 exit HeckleRunner.run

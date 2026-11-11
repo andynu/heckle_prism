@@ -208,6 +208,15 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, status.exitstatus
   end
 
+  # One pipe for both streams, as with 2>&1 into a file.
+  def test_stdout_is_not_reordered_against_stderr
+    out, status = Open3.capture2e(RbConfig.ruby, BIN, "Doubler", "double", "-T", "7", *BROKEN, chdir: PROJECT)
+
+    refute status.success?
+    assert_equal ["Setting timeout at 7 seconds.", "Initial run of tests failed... fix and run heckle again"],
+                 out.lines.map(&:chomp)
+  end
+
   def test_timeout_guess
     out, _err, _status = heckle("Doubler", "double", "-n", "if")
 
