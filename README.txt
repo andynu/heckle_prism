@@ -102,9 +102,11 @@ default minitest setup: all three forms above ran, the suite did not
 run again at exit, and rows created by tests were rolled back between
 mutant runs as they are in rails test. The parallelize line was removed
 from test/test_helper.rb first, and heckle has not been tried with it.
-For a model, heckle Widget prints a "Skipping" line for each method
-Rails generates in the class (such as self.__class_attr___callbacks);
-these are not written with def and can be ignored.
+When heckling a whole class, heckle leaves out methods whose source is
+outside the project directory, such as the ones Rails generates in a
+model (self.__class_attr___callbacks and the like); -v lists them. A
+method defined inside the project without def, such as an
+attr_accessor, gets a "Skipping" line.
 
 Known limits:
 

@@ -171,10 +171,34 @@ class HeckleRunner
     return [heckler(@method)] if @method
 
     method_names(klass).filter_map do |name|
+      next unless in_project?(klass, name)
+
       heckler(name)
     rescue Heckle::SourceNotFound => e
       puts "Skipping #{e.message}"
     end
+  end
+
+  # Methods a gem or Ruby defines in the class (Rails' class_attribute
+  # accessors, say) are not the user's to heckle; -v still names them.
+  def in_project? klass, name
+    owner = name.start_with?("self.") ? klass.singleton_class : klass
+    file, line = owner.instance_method(name.delete_prefix("self.")).source_location
+    return true if file && inside_project?(file)
+
+    if Heckle.debug
+      where = file ? "defined outside the project, at #{file}:#{line}" : "no source location"
+      puts "Skipping #{@class_or_module}##{name}: #{where}"
+    end
+    false
+  end
+
+  def inside_project? file
+    path = File.expand_path(file)
+    return false unless File.exist?(path)
+
+    root = File.realpath(Dir.pwd)
+    File.realpath(path).start_with?(root + File::SEPARATOR)
   end
 
   def heckler name

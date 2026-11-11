@@ -90,6 +90,35 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, status.exitstatus
   end
 
+  # Gauge#calibrated is defined by test/fixtures/outside_helper.rb, outside
+  # the project; Gauge#level and #level= by attr_accessor inside it.
+  def test_whole_class_leaves_out_methods_defined_outside_the_project
+    out, err, status = heckle("Gauge")
+
+    assert_equal "", err
+    refute_includes out, "calibrated"
+    assert_includes out, "Skipping Gauge#level: no def at"
+    assert_includes out, "Skipping Gauge#level=: no def at"
+    assert_includes out, "Passed    :   1\nFailed    :   0\nThick Skin:   0\n"
+    assert_equal 0, status.exitstatus
+  end
+
+  def test_verbose_notes_methods_defined_outside_the_project
+    out, _err, status = heckle("Gauge", "-v")
+
+    helper = File.expand_path("fixtures/outside_helper.rb", __dir__)
+    assert_includes out, "Skipping Gauge#calibrated: defined outside the project, at #{helper}:5\n"
+    assert_includes out, "Skipping Gauge#level: no def at"
+    assert_equal 0, status.exitstatus
+  end
+
+  def test_named_method_outside_the_project_still_errors
+    _out, err, status = heckle("Gauge", "calibrated")
+
+    refute status.success?
+    assert_match(/\AGauge#calibrated: no def at .*outside_helper\.rb:5\n\z/, err)
+  end
+
   def test_nodes_option_limits_mutations
     out, _err, status = heckle("Doubler", "double", "-n", "if")
 
