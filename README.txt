@@ -37,6 +37,9 @@ It's like hiring a white-hat hacker to try to break into your server and making 
   found under the block-defined class's name.
 * With --fork, each mutant runs in a forked child process and the heckle
   process itself never loads a mutant. See FORK MODE below.
+* Each mutant's test run is limited in time and in resident memory, and
+  --fork is the mode that can always enforce both. See TIMEOUTS AND
+  MEMORY below.
 * Tests are plain Minitest, run in-process. Other test frameworks are not
   supported.
 * Mutation kinds (the names the -n and -x flags take):
@@ -79,8 +82,12 @@ Main options:
                          every kind except these
     -b, --branches       only if, while and until
         --assignments    only the assignment kinds
-    -T, --timeout SECS   time limit per test run; without it the limit is
-                         twice the unmutated run, at least 5 seconds
+    -T, --timeout SECS   time limit per test run, a whole number of seconds;
+                         without it the limit is twice the unmutated run,
+                         at least 5 seconds
+        --memory-limit MB
+                         most resident memory a test run may use; 0 turns
+                         the limit off. See TIMEOUTS AND MEMORY below
     -F, --force          go on even if the unmutated tests fail
         --fork           run each mutant in a forked child process
     -v, --verbose        show each mutant and the test output
@@ -92,7 +99,8 @@ file:
 
 Each mutant the tests did not catch is printed as a diff against the
 original method. The exit status is 0 when every mutant was caught and 1
-otherwise.
+otherwise, or 2 when heckle had to end the process itself (see TIMEOUTS
+AND MEMORY).
 
 After each method, a line such as "2 of 9 mutants survived" gives the
 number of its mutants the tests did not catch and the number heckle ran.
@@ -103,8 +111,8 @@ and Thick Skin) and then mutants:
     Mutants   :  31 killed, 4 survived
 
 A mutant counts as killed when it was run and did not survive: the tests
-failed or raised, timed out, or the mutant raised a SyntaxError when
-installed. Killed plus survived is the number of mutants run across all
+failed or raised, timed out, went over the memory limit in fork mode, or
+the mutant raised a SyntaxError when installed. Killed plus survived is the number of mutants run across all
 the methods heckled. Passed and Failed count methods, so one method with
 many survivors shows as one failure there and as many in the mutant
 line.
@@ -143,7 +151,8 @@ mutants the method has, which is another reason to narrow the run with
 The exit status is 0 when no mutant survived, which includes a class or
 method with nothing to mutate. It is 1 when at least one mutant
 survived, and also on a usage error or when the unmutated tests fail
-without -F.
+without -F. It is 2 when heckle ended the process because a mutant could
+not be contained in-process, after a report on standard error.
 
 Rails works. It was tried on a Rails 8.1 application with SQLite and the
 default minitest setup: all three forms above ran, the suite did not
@@ -197,6 +206,91 @@ Known limits:
   changed, even when the methods that use it are heckled. A survivor
   count of zero says nothing about whether the tests check that data.
 
+== TIMEOUTS AND MEMORY:
+
+A mutant can make a method loop forever or allocate without end. Heckle
+limits each mutant's test run in time and in resident memory. How
+firmly it can hold those limits depends on the mode.
+
+The timeout. Each test run gets -T seconds, or without -T twice the time
+of the unmutated run, at least 5 seconds. When it runs over, heckle
+raises Heckle::Timeout in it, prints the timeout warning, counts the
+mutant as killed and goes on. Heckle::Timeout is an Exception, not a
+StandardError, so neither a bare rescue nor "rescue StandardError" in
+the code under test catches it, and Minitest lets it through.
+
+How a timeout gets lost. Ruby's Timeout raises once and does not raise
+again. Heckle::Timeout used to be a StandardError. On a Rails
+application, a mutant turned
+
+    (book.first_row(sheet)..book.last_row(sheet)).map do |row|
+
+into an endless range, (book.first_row(sheet)..nil), inside code that
+rescued StandardError around the call. The rescue caught the timeout,
+the test carried on, and the next test reached the same loop with no
+timer. Memory use on the machine grew from 34 GB to 115 GB over about
+four hours, until the system's out-of-memory killer ended the whole
+terminal session. Code that rescues Exception, or rescues and retries,
+can still swallow the timeout, which is what the watchdog is for.
+
+The watchdog. In-process, a thread of heckle's own keeps the deadline.
+At the deadline it raises the timeout in the test run, and again every
+half second while the run goes on. If the run is still going two
+seconds after the first raise, the watchdog writes a report to standard
+error, naming the method, the mutant as a diff, that the timeout was
+swallowed, and --fork, and ends the process at once with exit status 2.
+It does not restore the method, print results or run at_exit handlers.
+A test run that returns normally after its timeout was swallowed counts
+as timed out, never as a survivor. From the deadline to the end of the
+process took 2.1 to 2.5 seconds on Ruby 2.7.8 through 4.0.9.
+
+The memory limit. heckle prints it on the line after "Timeout set to N
+seconds.". By default it is the heckle process's resident memory after
+the unmutated run, plus the larger of 1024 MB and that amount again.
+--memory-limit MB sets it in megabytes of 1048576 bytes, and
+--memory-limit 0 turns it off. Resident memory is read from
+/proc/PID/status, every 50 milliseconds while a mutant runs, or where
+there is no /proc from ps(1), every half second. Where it cannot be
+read at all, heckle says once that the limit is not enforced.
+
+In-process, the watchdog reads the heckle process's memory and, over
+the limit, writes a report like the one above and ends the process with
+exit status 2. In fork mode, heckle reads the child's memory, kills the
+child's process group with KILL when it goes over, warns that the
+mutant was not counted as a survivor, and goes on with the next one.
+Only the child itself is measured, not processes it starts.
+
+On Linux the process that runs the mutant, heckle itself in-process or
+the child in fork mode, also lowers its soft RLIMIT_DATA to about 1024
+MB above what the limit allows. An allocation that crosses it, such as
+one C call asking for gigabytes at once, fails with NoMemoryError
+before the polling could see it, and is reported the same way.
+Processes the tests start inherit the lowered limit.
+
+With tight allocation loops, against a limit 1 GiB above the starting
+memory, resident memory peaked 2 to 298 MB over the limit in-process
+and 0 to 149 MB over it in fork mode, on Ruby 2.7.8 through 4.0.9.
+In-process the polling thread has to wait for Ruby's global VM lock,
+and a long garbage collection holds it.
+
+What in-process mode cannot contain:
+
+* A mutant stuck in one C call that never gives up the global VM lock,
+  such as a loop in a C extension or one enormous bignum computation.
+  Heckle's own thread cannot run until the call returns, so neither the
+  timeout nor the memory polling acts, and if the call never returns,
+  heckle never ends. The RLIMIT_DATA backstop still bounds memory, but
+  on Ruby 3.2 and 3.3 a process that reaches it with small objects can
+  then spin in garbage collection, using a CPU, until it is killed.
+* Threads the tests start, including the workers of Minitest's
+  parallelize_me!. A timeout ends the test run in heckle's thread, but
+  such a thread keeps running until heckle exits.
+* State a mutant changes that later mutants see (see Known limits).
+
+--fork contains all of these. The heckle process never runs a mutant,
+so it can always stop the child when the child runs over its time or
+memory, whatever the child is doing.
+
 == FORK MODE:
 
     % bundle exec heckle Widget --fork
@@ -217,7 +311,9 @@ of its own, with any processes its tests start. When a child runs
 over, heckle sends the group TERM, then KILL a second later if the
 child is still running, then KILL to whatever is left of the group, and
 prints the usual timeout warning. ^C stops the child's group the same
-way. A child that ends any other way (an exception out of the test
+way. A child that goes over the memory limit is sent KILL at once, with
+its group, and a child that runs out of memory gets a warning; neither
+is counted as a survivor. A child that ends any other way (an exception out of the test
 run, an unexpected exit status, a signal) gets a warning, and its
 mutant is counted as killed, never as survived. Fork mode needs
 Process.fork; on a Ruby without it, such as Ruby on Windows, heckle
