@@ -35,14 +35,15 @@ class TestConsumerProject < Minitest::Test
             "-v", "-t", "pipe/thermometer_pipe_test.rb"]
     run = lambda do
       Open3.popen3(env, *args, chdir: PROJECT) do |stdin, stdout, stderr, thread|
-        stdin.close
-        stdout.each_line.find { |line| line == "mutant installed\n" }
+        marker = stdout.each_line.find { |line| line.end_with?("mutant installed\n") }
         stdout.close
-        [stderr.read, thread.value]
+        stdin.close
+        [marker, stderr.read, thread.value]
       end
     end
-    err, status = defined?(Bundler) ? Bundler.with_unbundled_env(&run) : run.()
+    marker, err, status = defined?(Bundler) ? Bundler.with_unbundled_env(&run) : run.()
 
+    assert marker, "no mutant was announced"
     refute status.success?, "exit status #{status.inspect}"
     assert_equal 1, status.exitstatus
     assert_equal ["at exit: [212, 32]"], err.lines.map(&:chomp)

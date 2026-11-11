@@ -7,14 +7,15 @@ rescue StandardError => e
 end
 
 # Under -v the tests write to heckle's stdout. Once a mutant is installed
-# this test says so and waits, so the reader can close the pipe and the
-# next write fails while the mutant is still in place.
+# this test says so and blocks until the reader closes stdin, which it does
+# after closing stdout, so the next write fails while the mutant is still
+# in place. Minitest's progress dots may precede the marker on its line.
 class ThermometerPipeTest < Minitest::Test
   def test_announce_mutant
     return if thermometer_readings == [212, 32]
 
     puts "mutant installed"
-    sleep 0.5
+    $stdin.read
   end
 end
 
