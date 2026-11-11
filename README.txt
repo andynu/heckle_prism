@@ -52,7 +52,9 @@ test. The unmutated tests are run once first and must pass.
 
 Main options:
 
-    -t, --tests PATTERN  test files to load (a glob)
+    -t, --tests PATTERN  test files to load (a glob); repeat it to load
+                         several patterns. Any -t replaces the default
+                         patterns, and each one given must match a file
     -n, --nodes KINDS    only these mutation kinds, comma separated
     -x, --exclude-nodes KINDS
                          every kind except these
@@ -106,6 +108,17 @@ the number of mutants times the time of the whole loaded suite. Use -t
 to load only the tests that cover the class:
 
     % bundle exec heckle Widget -t test/models/widget_test.rb
+
+When the tests that cover the class live in more than one file, give -t
+once per pattern:
+
+    % bundle exec heckle Widget -t test/models/widget_test.rb -t 'test/jobs/widget_*_test.rb'
+
+The run time is the per-mutant cost of the loaded tests, not of the
+method being heckled. A suite whose tests each make round trips to a
+remote test database stays bound by those round trips however few
+mutants the method has, which is another reason to narrow the run with
+-t.
 
 The exit status is 0 when no mutant survived, which includes a class or
 method with nothing to mutate. It is 1 when at least one mutant
