@@ -2,6 +2,7 @@ require "minitest/autorun"
 require "fixtures/heckle_dummy"
 require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
+require "fixtures/heckle_blocks"
 require "heckle"
 
 class TestHeckler < Heckle
@@ -135,6 +136,88 @@ class TestHeckle < Minitest::Test
     assert_equal 16, HeckleNesting::Inner.new.limit
     heckler.restore
     assert_equal 11, HeckleNesting::Inner.new.limit
+  end
+
+  def test_install_and_restore_data_define_method
+    heckler = install_only("HeckleBlocks::Point", "sum", [:lit])
+
+    assert_equal 14, HeckleBlocks::Point.new(x: 3, y: 5).sum
+    heckler.restore
+    assert_equal 9, HeckleBlocks::Point.new(x: 3, y: 5).sum
+  end
+
+  def test_install_and_restore_data_define_self_method
+    heckler = install_only("HeckleBlocks::Point", "self.origin_sum", [:lit])
+
+    assert_equal 47, HeckleBlocks::Point.origin_sum
+    heckler.restore
+    assert_equal 42, HeckleBlocks::Point.origin_sum
+  end
+
+  def test_install_and_restore_struct_method_using_module_constant
+    heckler = install_only("HeckleBlocks::Pair", "scaled", [:lit])
+
+    assert_equal 26, HeckleBlocks::Pair.new(2, 0).scaled
+    heckler.restore
+    assert_equal 21, HeckleBlocks::Pair.new(2, 0).scaled
+  end
+
+  def test_install_and_restore_struct_singleton_method
+    heckler = install_only("HeckleBlocks::Pair", "self.answer", [:lit])
+
+    assert_equal 47, HeckleBlocks::Pair.answer
+    heckler.restore
+    assert_equal 42, HeckleBlocks::Pair.answer
+  end
+
+  def test_struct_private_method_stays_private
+    heckler = install_only("HeckleBlocks::Pair", "hidden", [:lit])
+
+    assert HeckleBlocks::Pair.private_method_defined?(:hidden, false)
+    assert_equal 47, HeckleBlocks::Pair.new.call_hidden
+    heckler.restore
+    assert HeckleBlocks::Pair.private_method_defined?(:hidden, false)
+    assert_equal 42, HeckleBlocks::Pair.new.call_hidden
+  end
+
+  def test_install_and_restore_class_new_method
+    heckler = install_only("HeckleBlocks::Child", "answer", [:lit])
+
+    assert_equal 47, HeckleBlocks::Child.new.answer
+    assert_equal HeckleBlocks::Base, HeckleBlocks::Child.superclass
+    heckler.restore
+    assert_equal 42, HeckleBlocks::Child.new.answer
+  end
+
+  # The block's lexical scope is the module, so SCALE is the module's even
+  # though the class has a SCALE of its own.
+  def test_block_scope_mutant_keeps_the_block_constant_lookup
+    assert_equal 11, HeckleBlocks::Child.new.scaled
+    heckler = install_only("HeckleBlocks::Child", "scaled", [:lit])
+
+    assert_equal 16, HeckleBlocks::Child.new.scaled
+    heckler.restore
+    assert_equal 11, HeckleBlocks::Child.new.scaled
+  end
+
+  def test_install_and_restore_module_new_method
+    heckler = install_only("HeckleBlocks::Mixin", "mixed", [:lit])
+    holder = Object.new.extend(HeckleBlocks::Mixin)
+
+    assert_equal 47, holder.mixed
+    heckler.restore
+    assert_equal 42, holder.mixed
+  end
+
+  def test_block_scope_install_is_silent_under_verbose
+    verbose = $VERBOSE
+    assert_silent do
+      $VERBOSE = true
+      heckler = install_only("HeckleBlocks::Pair", "scaled", [:lit])
+      heckler.restore
+    end
+  ensure
+    $VERBOSE = verbose
   end
 
   def test_class_with_superclass_is_reopened

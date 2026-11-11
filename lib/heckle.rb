@@ -551,6 +551,9 @@ class Heckle
 
   # `module A; class B; class << self; <def>\nend; end; end` on the def's
   # first line. No superclass, so reopening a subclass cannot mismatch.
+  # A block-defined class (`C = Struct.new do`) is entered with class_eval
+  # rather than reopened, so constant lookup stays that of the block, whose
+  # lexical scope is the enclosing nesting.
   def wrapped(def_source)
     nesting = @found.nesting
     header = nesting.map { |node| "#{scope_header(node)}; " }.join
@@ -563,6 +566,8 @@ class Heckle
     when Prism::SingletonClassNode then "class << self"
     when Prism::ClassNode then "class #{node.constant_path.slice}"
     when Prism::ModuleNode then "module #{node.constant_path.slice}"
+    when Prism::ConstantWriteNode then "#{node.name}.class_eval do"
+    when Prism::ConstantPathWriteNode then "#{node.target.slice}.class_eval do"
     end
   end
 

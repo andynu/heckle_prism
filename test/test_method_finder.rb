@@ -289,6 +289,190 @@ class TestMethodFinder < Minitest::Test
     refute_nil find_in(class_only, "A", "self.foo")
   end
 
+  def test_data_define_block
+    source = <<~RUBY
+      module M
+        Point = Data.define(:x, :y) do
+          def sum
+            :data
+          end
+        end
+      end
+    RUBY
+
+    result = find_in(source, "M::Point", "sum")
+
+    assert_equal ":data", body_of(result)
+    assert_equal [Prism::ModuleNode, Prism::ConstantWriteNode], result.nesting.map(&:class)
+    assert_equal :Point, result.nesting.last.name
+    assert_nil find_in(source, "Point", "sum")
+    assert_nil find_in(source, "M", "sum")
+  end
+
+  def test_struct_new_brace_block
+    source = <<~RUBY
+      Pair = Struct.new(:a, :b) { def total; :braces; end }
+    RUBY
+
+    assert_equal ":braces", body_of(find_in(source, "Pair", "total"))
+  end
+
+  def test_class_new_with_parent
+    source = <<~RUBY
+      class Outer
+        Child = Class.new(StandardError) do
+          def message
+            :child
+          end
+        end
+      end
+    RUBY
+
+    assert_equal ":child", body_of(find_in(source, "Outer::Child", "message"))
+  end
+
+  def test_module_new_block
+    source = <<~RUBY
+      Helpers = Module.new do
+        def help
+          :module
+        end
+      end
+    RUBY
+
+    assert_equal ":module", body_of(find_in(source, "Helpers", "help"))
+  end
+
+  def test_constant_path_assignment
+    source = <<~RUBY
+      module A
+        B::C = Struct.new(:v) do
+          def v2
+            :path
+          end
+        end
+      end
+      A::D = Struct.new(:v) do
+        def v3
+          :top
+        end
+      end
+    RUBY
+
+    result = find_in(source, "A::B::C", "v2")
+
+    assert_equal ":path", body_of(result)
+    assert_equal [Prism::ModuleNode, Prism::ConstantPathWriteNode], result.nesting.map(&:class)
+    assert_equal ":top", body_of(find_in(source, "A::D", "v3"))
+  end
+
+  def test_rooted_constant_path_assignment_is_top_level
+    source = <<~RUBY
+      module A
+        ::E = Struct.new(:v) do
+          def v4
+            :rooted
+          end
+        end
+      end
+    RUBY
+
+    assert_equal ":rooted", body_of(find_in(source, "E", "v4"))
+    assert_nil find_in(source, "A::E", "v4")
+  end
+
+  def test_block_scope_class_methods
+    source = <<~RUBY
+      Pair = Struct.new(:a) do
+        def self.build
+          :self_def
+        end
+
+        class << self
+          def make
+            :singleton
+          end
+        end
+
+        private def hidden
+          :private
+        end
+      end
+    RUBY
+
+    assert_equal ":self_def", body_of(find_in(source, "Pair", "self.build"))
+    singleton = find_in(source, "Pair", "self.make")
+    assert_equal ":singleton", body_of(singleton)
+    assert_equal [Prism::ConstantWriteNode, Prism::SingletonClassNode], singleton.nesting.map(&:class)
+    assert_equal ":private", body_of(find_in(source, "Pair", "hidden"))
+    assert_nil find_in(source, "Pair", "build")
+  end
+
+  def test_block_scope_reopened_by_class_keyword
+    source = <<~RUBY
+      Pair = Struct.new(:a) do
+        def first
+          :block
+        end
+      end
+
+      class Pair
+        def second
+          :reopened
+        end
+      end
+    RUBY
+
+    assert_equal ":block", body_of(find_in(source, "Pair", "first"))
+    assert_equal ":reopened", body_of(find_in(source, "Pair", "second"))
+  end
+
+  # A class keyword inside the block names a constant of the enclosing
+  # scope, not of the block-defined class.
+  def test_scopes_inside_a_block_scope_are_not_searched
+    source = <<~RUBY
+      Pair = Struct.new(:a) do
+        class Inner
+          def foo
+            :inner
+          end
+        end
+      end
+    RUBY
+
+    assert_nil find_in(source, "Pair::Inner", "foo")
+  end
+
+  def test_constant_assignment_without_block_is_not_a_scope
+    source = <<~RUBY
+      Pair = Struct.new(:a)
+      def foo
+        :top
+      end
+      Value = 1
+    RUBY
+
+    assert_nil find_in(source, "Pair", "foo")
+    assert_nil find_in(source, "Value", "foo")
+  end
+
+  def test_block_scope_selected_by_line
+    source = <<~RUBY
+      Pair = Struct.new(:a) do
+        def foo
+          :first
+        end
+
+        def foo
+          :second
+        end
+      end
+    RUBY
+
+    assert_equal ":first", body_of(Heckle::MethodFinder.new(source).find("Pair", "foo", line: 2))
+    assert_equal ":second", body_of(find_in(source, "Pair", "foo"))
+  end
+
   def test_class_body_with_rescue
     source = <<~RUBY
       class A

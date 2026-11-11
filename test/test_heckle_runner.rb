@@ -92,6 +92,18 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, status.exitstatus
   end
 
+  # Money is a Data.define class whose methods are defined in its block.
+  def test_whole_class_defined_by_a_block
+    out, err, status = heckle("Money", "-t", "test/money_test.rb")
+
+    assert_equal "", err
+    refute_includes out, "Skipping"
+    loaded = out.scan(/^\*\*\*  (Money#\S+) loaded/).flatten
+    assert_equal %w[Money#dollars Money#self.zero], loaded
+    assert_includes out, "Passed    :   2\nFailed    :   0\nThick Skin:   0\nMutants   :   6 killed, 0 survived\n"
+    assert_equal 0, status.exitstatus
+  end
+
   # Gauge#calibrated is defined by test/fixtures/outside_helper.rb, outside
   # the project; Gauge#level and #level= by attr_accessor inside it.
   def test_whole_class_leaves_out_methods_defined_outside_the_project

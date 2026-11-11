@@ -32,9 +32,13 @@ class Heckle
 
     private
 
+    # A block scope (`Name = Struct.new do ... end`) is a leaf: a class or
+    # module keyword inside the block names a constant of the enclosing
+    # scope, not of the block-defined class.
     def search_scopes(body, path, nesting, target, &block)
       statements_of(body).each do |node|
-        next unless SCOPE_NODES.include?(node.class)
+        block_scope = block_scope?(node)
+        next unless block_scope || SCOPE_NODES.include?(node.class)
 
         candidate = scope_path(node, path)
         candidate = nil unless candidate && target.first(candidate.size) == candidate
@@ -42,16 +46,23 @@ class Heckle
         inner = nesting + [node]
         if candidate == target
           yield node, inner
-        else
+        elsif !block_scope
           search_scopes(node.body, candidate, inner, target, &block)
         end
       end
     end
 
+    # `Name = call(...) do ... end` or `A::B = call { ... }`, whatever the call.
+    def block_scope?(node)
+      return false unless node.is_a?(Prism::ConstantWriteNode) || node.is_a?(Prism::ConstantPathWriteNode)
+
+      node.value.is_a?(Prism::CallNode) && node.value.block.is_a?(Prism::BlockNode)
+    end
+
     # A nil path means the enclosing scope is off target; only a
-    # `::`-rooted header, which names a top-level constant, can match there.
+    # `::`-rooted name, which names a top-level constant, can match there.
     def scope_path(node, path)
-      parts = node.constant_path.full_name_parts
+      parts = scope_name_parts(node)
       return parts.drop(1) if parts.first == :""
 
       path && path + parts
@@ -59,8 +70,20 @@ class Heckle
       nil
     end
 
+    def scope_name_parts(node)
+      case node
+      when Prism::ConstantWriteNode then [node.name]
+      when Prism::ConstantPathWriteNode then node.target.full_name_parts
+      else node.constant_path.full_name_parts
+      end
+    end
+
+    def scope_body(scope)
+      block_scope?(scope) ? scope.value.block.body : scope.body
+    end
+
     def collect_defs(scope, nesting, name, singleton, matches)
-      statements_of(scope.body).each do |node|
+      statements_of(scope_body(scope)).each do |node|
         if singleton && node.is_a?(Prism::SingletonClassNode) && node.expression.is_a?(Prism::SelfNode)
           statements_of(node.body).each do |inner|
             each_def(inner) do |def_node|
