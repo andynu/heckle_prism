@@ -17,6 +17,18 @@ class TestMutation < Minitest::Test
     assert_equal "x", m.replacement
   end
 
+  def test_positional_arguments
+    assert_equal mutation(1, 3, "x", kind: :true), Heckle::Mutation.new(:true, 1, 3, "x")
+  end
+
+  def test_missing_keyword_raises
+    assert_raises(ArgumentError) { Heckle::Mutation.new(kind: :lit, start_offset: 1, end_offset: 3) }
+  end
+
+  def test_is_frozen
+    assert_predicate mutation(1, 3, "x"), :frozen?
+  end
+
   def test_replaces_span
     assert_equal "a = 7", mutation(4, 5, "7").apply("a = 1")
   end
