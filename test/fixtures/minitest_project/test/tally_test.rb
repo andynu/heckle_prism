@@ -1,7 +1,6 @@
 require "minitest/autorun"
 require "tally"
 
-# Outside the default test/test_*.rb glob; select with -t.
 class TallyTest < Minitest::Test
   def test_start
     assert_instance_of Tally, Tally.start

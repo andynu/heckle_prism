@@ -23,13 +23,18 @@ class HeckleRunner
     abort e.message
   end
 
+  ##
+  # Test files loaded unless -t is given.
+
+  DEFAULT_TEST_PATTERNS = %w[test/**/test_*.rb test/**/*_test.rb].freeze
+
   def self.parse_args argv
     options = {
       :force => false,
       :nodes => Heckle::MUTATABLE_NODES,
       :debug => false,
       :timeout => nil,
-      :test_pattern => 'test/test_*.rb',
+      :test_pattern => DEFAULT_TEST_PATTERNS,
     }
 
     OptionParser.new do |opts|
@@ -41,7 +46,8 @@ class HeckleRunner
       end
 
       opts.on("-t", "--tests TEST_PATTERN",
-              "Location of tests (glob)") do |pattern|
+              "Location of tests (glob)",
+              "default: #{DEFAULT_TEST_PATTERNS.join(' and ')}") do |pattern|
         options[:test_pattern] = pattern
       end
 
@@ -153,9 +159,9 @@ class HeckleRunner
   end
 
   def load_tests
-    $LOAD_PATH << 'test' unless $LOAD_PATH.include? 'test'
-    files = Dir.glob(@options[:test_pattern])
-    raise Error, "No test files match #{@options[:test_pattern]}" if files.empty?
+    patterns = Array(@options[:test_pattern])
+    files = Dir.glob(patterns).uniq
+    raise Error, "No test files match #{patterns.join(' or ')}" if files.empty?
 
     Heckle.load_tests(files)
   end

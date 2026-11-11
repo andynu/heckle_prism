@@ -39,7 +39,7 @@ class TestTestsPass < Minitest::Test
 
   def test_failing_suite
     assert_drive "false\nruns=1\n", <<~RUBY
-      Heckle.load_tests(["test/broken_doubler_test.rb"])
+      Heckle.load_tests(["broken/broken_doubler_test.rb"])
       p Heckle.new("Doubler", "double").tests_pass?
     RUBY
   end

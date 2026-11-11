@@ -1,7 +1,12 @@
 #!/usr/bin/env ruby
 
 $LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
-$LOAD_PATH << 'lib'
+
+# The project being heckled, run from its root.
+%w[test lib].each do |dir|
+  path = File.expand_path(dir)
+  $LOAD_PATH.unshift(path) unless $LOAD_PATH.include?(path)
+end
 
 require 'heckle_runner'
 

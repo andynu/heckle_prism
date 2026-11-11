@@ -10,7 +10,7 @@ class TestHeckleRunner < Minitest::Test
   PROJECT = File.expand_path("fixtures/minitest_project", __dir__)
   PARTIAL = %w[--tests test/test_doubler_with_a_number.rb].freeze
   TALLY = %w[--tests test/tally_test.rb].freeze
-  BROKEN = %w[--tests test/broken_doubler_test.rb].freeze
+  BROKEN = %w[--tests broken/broken_doubler_test.rb].freeze
 
   def heckle(*args)
     Open3.capture3(RbConfig.ruby, BIN, *args, chdir: PROJECT)
@@ -192,8 +192,43 @@ class TestHeckleRunner < Minitest::Test
     assert_includes out, "Timeout set to 7 seconds."
   end
 
+  # halver_test.rb and test_quarter.rb sit in test/units and require
+  # "test_helper", which requires "halver" from the project's lib.
+  def test_default_patterns_find_nested_tests_of_both_names
+    out, err, status = heckle("Halver")
+
+    assert_equal "", err
+    assert_includes out, "Passed    :   2\nFailed    :   0\n"
+    assert_equal 0, status.exitstatus
+  end
+
+  def test_tests_option_replaces_the_default_patterns
+    out, _err, status = heckle("Halver", "-t", "test/units/*_test.rb")
+
+    assert_includes out, "Passed    :   1\nFailed    :   1\n"
+    assert_includes out, "-  x / 4\n"
+    assert_equal 1, status.exitstatus
+  end
+
+  def test_default_patterns_skip_files_outside_test
+    out, _err, status = heckle("Doubler", "double")
+
+    assert_includes out, "Initial tests pass."
+    assert_equal 0, status.exitstatus
+  end
+
+  # Run straight from the checkout, with no Bundler to set up heckle's lib.
+  def test_runs_from_the_checkout_without_bundler
+    run = -> { Open3.capture3(RbConfig.ruby, BIN, "Halver", "halve", chdir: PROJECT) }
+    out, err, status = defined?(Bundler) ? Bundler.with_unbundled_env(&run) : run.()
+
+    assert_equal "", err
+    assert_includes out, "No mutants survived."
+    assert_equal 0, status.exitstatus
+  end
+
   def test_verbose
-    out, _err, _status = heckle("Doubler", "double", "-n", "if", "-v")
+    out, _err, _status = heckle("Doubler", "double", "-n", "if", "-v", "-t", "test/test_doubler_*.rb")
 
     assert_includes out, "debug: true"
     assert_includes out, "Replacing Doubler#double with:"
@@ -209,6 +244,7 @@ class TestHeckleRunner < Minitest::Test
     end
     refute_includes out, "--focus"
     refute_includes out, "sauron"
+    assert_includes out, "default: test/**/test_*.rb and test/**/*_test.rb"
     assert_equal 0, status.exitstatus
   end
 
@@ -233,7 +269,7 @@ class TestHeckleRunner < Minitest::Test
 
     assert_equal %w[Doubler double], rest
     assert_equal Heckle::MUTATABLE_NODES, options[:nodes]
-    assert_equal "test/test_*.rb", options[:test_pattern]
+    assert_equal %w[test/**/test_*.rb test/**/*_test.rb], options[:test_pattern]
     assert_equal false, options[:force]
     assert_equal false, options[:debug]
     assert_nil options[:timeout]
