@@ -76,6 +76,8 @@ otherwise.
 
 * Ruby with Prism 2.1 or later
 * minitest 6.1 or later
+* diff(1) on the PATH, which prints each surviving mutant against the
+  original method
 
 ruby2ruby, ParseTree and ruby_parser are no longer used.
 
