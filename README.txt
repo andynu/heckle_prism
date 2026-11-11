@@ -72,6 +72,21 @@ Each mutant the tests did not catch is printed as a diff against the
 original method. The exit status is 0 when every mutant was caught and 1
 otherwise.
 
+After each method, a line such as "2 of 9 mutants survived" gives the
+number of its mutants the tests did not catch and the number heckle ran.
+A method with nothing to mutate gets the thick skin warning and no such
+line. The Heckle Results block at the end counts methods (Passed, Failed
+and Thick Skin) and then mutants:
+
+    Mutants   :  31 killed, 4 survived
+
+A mutant counts as killed when it was run and did not survive: the tests
+failed or raised, timed out, or the mutant raised a SyntaxError when
+installed. Killed plus survived is the number of mutants run across all
+the methods heckled. Passed and Failed count methods, so one method with
+many survivors shows as one failure there and as many in the mutant
+line.
+
 == USING HECKLE IN A PROJECT:
 
 This version of heckle is not published as a gem. Add it to the
@@ -108,6 +123,14 @@ model (self.__class_attr___callbacks and the like); -v lists them. A
 method defined inside the project without def, such as an
 attr_accessor, gets a "Skipping" line.
 
+SimpleCov can stay in test/test_helper.rb. After loading the tests,
+heckle sets SimpleCov.external_at_exit when SimpleCov is loaded, which
+turns off the report SimpleCov writes at exit. A heckle run then leaves
+the coverage directory as it was and prints nothing from SimpleCov.
+This holds for simplecov 0.19 and later (checked through 1.3.2).
+Heckle does not require simplecov and does nothing when it is not
+loaded.
+
 Known limits:
 
 * Only methods written with def are heckled. Methods made by
@@ -118,6 +141,26 @@ Known limits:
 * A mutant can change state that outlives one test run, such as a
   global, a class variable or a cache, and that change is seen by the
   runs of later mutants.
+* Equivalent mutants are reported like any other survivor. A mutant
+  that changes the code without changing what the method does cannot be
+  caught by any test, and heckle cannot tell it apart from a gap in the
+  tests. Two patterns seen in a real project:
+  * A guard made redundant by a later guard. In
+
+        return [] if text.blank?
+        return [] unless text.match?(/\d/)
+
+    replacing text.blank? with nil survives for any string, because
+    blank text has no digit and the second line returns [] for it.
+  * A method wrapped in "rescue StandardError". A mutant of a guard
+    before the rescue (its condition replaced by nil, or its if turned
+    into unless) often makes later code raise. When the rescue returns
+    the value the guard would have returned, the mutant survives, so
+    the rescue hides the mutants of the guards ahead of it.
+* Only method bodies are mutated. Constants are not, so data held in
+  constants, such as a hash of regexes or a lookup table, is never
+  changed, even when the methods that use it are heckled. A survivor
+  count of zero says nothing about whether the tests check that data.
 
 == REQUIREMENTS:
 
