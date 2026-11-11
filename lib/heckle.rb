@@ -6,6 +6,7 @@ require "heckle/method_finder"
 require "heckle/mutation"
 require "heckle/mutator"
 require "heckle/forking"
+require "heckle/memory"
 require "heckle/watchdog"
 
 ##
@@ -77,6 +78,7 @@ class Heckle
   @@guess_timeout = true
   @@timeout = 60 # default to something longer (can be overridden by runners)
   @@fork = false
+  @@memory_limit = nil
 
   def self.debug
     @@debug
@@ -108,6 +110,19 @@ class Heckle
 
   def self.fork=(value)
     @@fork = value
+  end
+
+  ##
+  # The most resident memory, in bytes, a mutant's test run may use, or
+  # nil for no limit. In-process the limit applies to the heckle process,
+  # in fork mode to each child.
+
+  def self.memory_limit
+    @@memory_limit
+  end
+
+  def self.memory_limit=(bytes)
+    @@memory_limit = bytes
   end
 
   ##
@@ -308,9 +323,9 @@ class Heckle
         if @@fork then
           run_forked mutation
         else
-          report = swallowed_timeout_report
+          reports = [swallowed_timeout_report, memory_report]
           install mutation
-          run_tests report
+          run_tests(*reports)
         end
       rescue SyntaxError => e
         @reporter.warning "Mutation caused a syntax error:\n\n#{e.message}"
@@ -460,9 +475,18 @@ class Heckle
 
   # Once the timeout has fired the outcome says nothing, even if the code
   # under test swallowed it and the tests went on to pass.
-  def run_tests(report)
-    watchdog = Watchdog.new(@@timeout, report)
-    passed = watchdog.watch { tests_pass? }
+  # Under a memory limit, a NoMemoryError out of the tests is the
+  # backstop failing an allocation, and ends the process as polling does.
+  def run_tests(report, memory_report)
+    Memory.backstop(@@memory_limit) if @@memory_limit
+    watchdog = Watchdog.new(@@timeout, report, memory_limit: @@memory_limit, memory_report: memory_report)
+    passed = begin
+      watchdog.watch { tests_pass? }
+    rescue NoMemoryError
+      raise unless @@memory_limit
+
+      Watchdog.end_process(memory_report.call(nil))
+    end
     raise Heckle::Timeout if watchdog.fired?
 
     if passed then
@@ -472,20 +496,44 @@ class Heckle
     end
   end
 
-  # Built before install, from strings only, since the watchdog writes it
-  # while the mutant is still running.
+  # The reports are built before install, so the watchdog writes them
+  # while the mutant runs without calling code the mutant may replace.
   def swallowed_timeout_report
     <<~TEXT
       heckle: #{klass_name}##{method_name}: the tests were still running #{Watchdog::GRACE} seconds
       after the #{@@timeout} second timeout was raised in them. The code under test
       swallowed the timeout, with a rescue of Exception or a retry, say.
-      Heckle ended the process without restoring the method, printing
-      results or running at_exit handlers. The mutant:
-
+      #{ended_the_process}
       #{plain_diff(dedent(original_source), dedent(@current_mutant))}
       Run heckle with --fork to contain a mutant like this one: each mutant
       then runs in a child process, which heckle kills when it runs over.
     TEXT
+  end
+
+  # Called with the resident memory in bytes, or nil when an allocation
+  # failed at the backstop.
+  def memory_report
+    head = "heckle: #{klass_name}##{method_name}: the tests went over the memory limit of #{megabytes(@@memory_limit)}"
+    tail = <<~TEXT
+      #{ended_the_process}
+      #{plain_diff(dedent(original_source), dedent(@current_mutant))}
+      Run heckle with --fork to contain a mutant like this one: each mutant
+      then runs in a child process, which heckle kills when it goes over
+      the limit. --memory-limit MB sets the limit, and 0 turns it off.
+    TEXT
+    lambda do |resident|
+      seen = resident ? "resident memory #{megabytes(resident)}" : "an allocation failed under the limit heckle sets"
+      "#{head}\n(#{seen}).\n#{tail}"
+    end
+  end
+
+  def ended_the_process
+    "Heckle ended the process without restoring the method, printing\n" \
+      "results or running at_exit handlers. The mutant:\n"
+  end
+
+  def megabytes(bytes)
+    "#{bytes.to_i / Memory::MB} MB"
   end
 
   # Both texts in full, as "diff -U" with the whole text as context shows

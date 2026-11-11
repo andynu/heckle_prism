@@ -9,6 +9,7 @@ require "fixtures/heckle_blocks"
 require "fixtures/heckle_shorthand" if RUBY_VERSION >= "3.1"
 require "fixtures/heckle_data" if RUBY_VERSION >= "3.2"
 require "heckle"
+require "bounded_process"
 
 class TestHeckler < Heckle
   def rand_number
@@ -1213,6 +1214,172 @@ class TestHeckle < Minitest::Test
     reader.read
   ensure
     reader.close
+  end
+
+  MB = Heckle::Memory::MB
+  LIB = File.expand_path("../lib", __dir__)
+
+  def with_memory_limit(bytes)
+    saved = Heckle.memory_limit
+    Heckle.memory_limit = bytes
+    yield
+  ensure
+    Heckle.memory_limit = saved
+  end
+
+  def proc_status(key)
+    File.read("/proc/self/status")[/^#{key}:\s+(\d+) kB/, 1].to_i * 1024
+  end
+
+  def test_memory_limit_is_off_by_default
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", LIB, "-e", 'require "heckle"; p Heckle.memory_limit')
+
+    assert status.success?, err
+    assert_equal "nil\n", out
+  end
+
+  def test_memory_default_limit
+    assert_equal 1124 * MB, Heckle::Memory.default_limit(100 * MB)
+    assert_equal 4096 * MB, Heckle::Memory.default_limit(2048 * MB)
+  end
+
+  def test_memory_resident_reads_this_process
+    skip "no /proc" unless File.exist?("/proc/self/status")
+
+    assert_equal :proc, Heckle::Memory.source
+    assert_in_delta proc_status("VmRSS"), Heckle::Memory.resident, 20 * MB
+    assert_in_delta proc_status("VmRSS"), Heckle::Memory.resident(Process.pid), 20 * MB
+  end
+
+  def test_memory_resident_through_ps_agrees
+    saved = Heckle::Memory.source
+    Heckle::Memory.source = :ps
+    by_ps = Heckle::Memory.resident
+    Heckle::Memory.source = saved
+    skip "no ps" unless by_ps
+
+    assert_in_delta Heckle::Memory.resident, by_ps, 20 * MB
+  ensure
+    Heckle::Memory.source = saved
+  end
+
+  def test_memory_resident_of_a_reaped_process_is_nil
+    pid = Process.spawn(RbConfig.ruby, "-e", "")
+    Process.wait(pid)
+
+    assert_nil Heckle::Memory.resident(pid)
+  end
+
+  # A large allocation crossing the backstop fails at once; a later call
+  # does not raise the limit again. Output is by syswrite: on Ruby 2.7,
+  # IO#flush hangs once a NoMemoryError has been raised.
+  def test_memory_backstop_fails_a_large_allocation
+    skip "no /proc" unless File.exist?("/proc/self/status")
+    script = <<~RUBY
+      require "heckle"
+      limit = Heckle::Memory.resident + 50 * Heckle::Memory::MB
+      _soft, hard = Process.getrlimit(:DATA)
+      Heckle::Memory.backstop(limit, 0)
+      soft = Process.getrlimit(:DATA)[0]
+      begin
+        "x" * (200 * Heckle::Memory::MB)
+        $stdout.syswrite "allocated\\n"
+      rescue NoMemoryError
+        $stdout.syswrite "NoMemoryError\\n"
+      end
+      Heckle::Memory.backstop(limit + 500 * Heckle::Memory::MB, 0)
+      $stdout.syswrite [Process.getrlimit(:DATA) == [soft, hard], soft < hard].inspect + "\\n"
+      exit!(0)
+    RUBY
+    run = BoundedProcess.capture3(RbConfig.ruby, "-I", LIB, "-e", script, seconds: 30)
+
+    assert_equal ["NoMemoryError\n[true, true]\n", ""], [run.out, run.err]
+  end
+
+  # In-process, a NoMemoryError out of the test run under a memory limit
+  # ends the process with a report, as polling does.
+  def test_in_process_no_memory_error_under_a_limit_ends_the_process
+    script = <<~RUBY
+      require "heckle"
+      require "fixtures/heckle_subjects"
+      class Raiser < Heckle
+        def tests_pass?
+          raise NoMemoryError, "failed to allocate memory"
+        end
+      end
+      Heckle.memory_limit = 500 * Heckle::Memory::MB
+      Raiser.new("HeckleSubjects", "answer", [:lit]).validate
+      puts "not reached"
+    RUBY
+    run = BoundedProcess.capture3(RbConfig.ruby, "-I", LIB, "-I", __dir__, "-e", script, seconds: 30)
+
+    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    refute_includes run.out, "not reached"
+    assert_match(/\Aheckle: HeckleSubjects#answer: the tests went over the memory limit of 500 MB\n\(an allocation failed/,
+                 run.err)
+    assert_includes run.err, "-  42\n+  "
+  end
+
+  # The child holds a megabyte more every few milliseconds until heckle
+  # kills it. It lowers its own RLIMIT_DATA first, so a heckle that fails
+  # to kill it ends it with NoMemoryError instead of growing on.
+  def test_fork_memory_limit_kills_the_child
+    skip "no /proc" unless File.exist?("/proc/self/status")
+    original = HeckleSubjects.instance_method(:pair)
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter, heckler_class: SignalRecordingHeckler) do |h|
+      if h.count == 1
+        cap = proc_status("VmData") + 400 * MB
+        Process.setrlimit(:DATA, cap, cap)
+        held = []
+        loop do
+          held << ("x" * MB)
+          sleep 0.005
+        end
+      end
+      false
+    end
+
+    limit = Heckle::Memory.resident + 100 * MB
+    result = with_memory_limit(limit) { with_timeout(20) { with_fork { heckler.validate } } }
+
+    assert_equal true, result
+    assert_equal %i[KILL], heckler.signals
+    assert_includes reporter.calls,
+                    [:warning, "The forked test run went over the memory limit of #{limit / MB} MB " \
+                               "and was killed. Not counted as a survivor."]
+    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal original, HeckleSubjects.instance_method(:pair)
+    assert_reaped heckler.pids
+  end
+
+  def test_fork_child_out_of_memory_is_not_a_survivor
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "answer", [:lit], reporter) { raise NoMemoryError, "failed to allocate memory" }
+
+    assert_equal true, with_fork { heckler.validate }
+    assert_includes reporter.calls,
+                    [:warning, "The forked test run ran out of memory. Not counted as a survivor."]
+    assert_empty heckler.failures
+    assert_reaped heckler.pids
+  end
+
+  # The backstop is set in the child, never in the parent.
+  def test_fork_child_sets_the_backstop_and_the_parent_does_not
+    skip "no /proc" unless File.exist?("/proc/self/status")
+    reader, writer = IO.pipe
+    heckler = forked("HeckleSubjects", "answer", [:lit]) do
+      writer.puts Process.getrlimit(:DATA)[0]
+      false
+    end
+    before = Process.getrlimit(:DATA)
+
+    with_memory_limit(Heckle::Memory.resident + 100 * MB) { with_fork { heckler.validate } }
+
+    child_soft = Integer(drain(reader, writer))
+    assert_operator child_soft, :<, before[0]
+    assert_operator child_soft, :>, proc_status("VmData")
+    assert_equal before, Process.getrlimit(:DATA)
   end
 
   def test_fork_setting_is_off_by_default

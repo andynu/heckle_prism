@@ -292,6 +292,78 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, run.status.exitstatus
   end
 
+  HOARDER = %w[Hoarder load -n call -t runaway/hoarder_test.rb].freeze
+
+  def memory_limit_line(out)
+    out[/^Timeout set to \d+ seconds\.\n(Memory limit.*)\n/, 1]
+  end
+
+  # The first mutant holds a megabyte more every few milliseconds.
+  def test_memory_limit_ends_the_process_in_process
+    run = bounded_heckle(*HOARDER, "--memory-limit", "150")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "Memory limit set to 150 MB.", memory_limit_line(run.out)
+    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    resident = run.err[/\Aheckle: Hoarder#load: the tests went over the memory limit of 150 MB\n\(resident memory (\d+) MB\)/, 1]
+    assert resident, run.err
+    assert_operator Integer(resident), :<, 150 + 150
+    assert_includes run.err, "-  (1..@rows.size).each { held << chunk }\n+  (1..nil).each { held << chunk }\n"
+    assert_includes run.err, "--fork"
+    assert_includes run.out, "5 mutations remaining...\n"
+    refute_includes run.out, "4 mutations remaining"
+  end
+
+  def test_memory_limit_kills_only_the_child_in_fork_mode
+    run = bounded_heckle(*HOARDER, "--memory-limit", "150", "--fork")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_equal "Memory limit set to 150 MB.", memory_limit_line(run.out)
+    assert_includes run.out, "!!! The forked test run went over the memory limit of 150 MB and was killed. " \
+                             "Not counted as a survivor.\n"
+    assert_includes run.out, "0 of 5 mutants survived"
+    assert_equal 0, run.status.exitstatus
+  end
+
+  # Resident memory after the unmutated run, plus the larger of 1 GiB and
+  # that amount again.
+  def test_memory_limit_default
+    out, err, status = heckle("Doubler", "double", "-n", "if")
+
+    assert_equal "", err
+    limit = memory_limit_line(out)[/\AMemory limit set to (\d+) MB\.\z/, 1]
+    assert limit, out
+    assert_includes 1025..1024 + 500, Integer(limit)
+    assert_equal 0, status.exitstatus
+  end
+
+  def test_memory_limit_zero_turns_it_off
+    run = bounded_heckle(*HOARDER, "-n", "if", "--memory-limit", "0")
+
+    assert_equal "", run.err
+    assert_equal "Memory limit off.", memory_limit_line(run.out)
+    assert_equal 0, run.status.exitstatus
+  end
+
+  def test_memory_limit_must_be_a_whole_number_of_megabytes
+    assert_aborts "invalid argument: --memory-limit lots", "Doubler", "--memory-limit", "lots"
+    assert_aborts "invalid argument: --memory-limit -1", "Doubler", "--memory-limit", "-1"
+  end
+
+  def test_memory_limit_not_enforced_where_memory_cannot_be_read
+    script = "require 'heckle'; Heckle::Memory.source = nil; load #{BIN.dump}"
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__),
+                                      "-e", script, "Doubler", "double", chdir: PROJECT)
+
+    assert_equal "", err
+    assert_equal "Memory limit not enforced: resident memory cannot be read on this platform.",
+                 memory_limit_line(out)
+    assert_equal 1, out.scan("Memory limit").size
+    assert_includes out, "No mutants survived."
+    assert_equal 0, status.exitstatus
+  end
+
   # One pipe for both streams, as with 2>&1 into a file.
   def test_stdout_is_not_reordered_against_stderr
     out, status = Open3.capture2e(RbConfig.ruby, BIN, "Doubler", "double", "-T", "7", *BROKEN, chdir: PROJECT)
@@ -397,7 +469,8 @@ class TestHeckleRunner < Minitest::Test
   def test_help
     out, _err, status = heckle("--help")
 
-    %w[--verbose --tests --force --assignments --branches --timeout --nodes --exclude-nodes --fork].each do |flag|
+    %w[--verbose --tests --force --assignments --branches --timeout --nodes --exclude-nodes --fork
+       --memory-limit].each do |flag|
       assert_includes out, flag
     end
     refute_includes out, "--focus"
@@ -417,8 +490,9 @@ class TestHeckleRunner < Minitest::Test
   # The same commands with and without --fork give the same output once
   # the random replacements are removed: they appear only on the
   # mutation side of a survivor's diff.
+  # The default memory limit is measured, so it can differ by a megabyte.
   def strip_replacements(out)
-    out.gsub(/^\+(?!\+\+ ).*$/, "+")
+    out.gsub(/^\+(?!\+\+ ).*$/, "+").sub(/^Memory limit set to \d+ MB\.$/, "Memory limit set to N MB.")
   end
 
   FORK_COMMANDS = [
@@ -497,7 +571,16 @@ class TestHeckleRunner < Minitest::Test
     assert_equal false, options[:debug]
     assert_nil options[:timeout]
     refute options.key?(:fork)
+    refute options.key?(:memory_limit)
     refute options.key?(:focus)
+    assert_equal "", out
+  end
+
+  def test_parse_args_memory_limit
+    options, rest, out = parse("--memory-limit", "300", "Doubler")
+
+    assert_equal 300, options[:memory_limit]
+    assert_equal %w[Doubler], rest
     assert_equal "", out
   end
 

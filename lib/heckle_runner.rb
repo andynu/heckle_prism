@@ -83,6 +83,15 @@ class HeckleRunner
         options[:timeout] = timeout
       end
 
+      opts.on("--memory-limit MB", Integer, "Most resident memory a test run may use",
+              "0 turns the limit off; default: the memory used",
+              "after the unmutated run plus the larger of",
+              "1024 MB and that amount again") do |megabytes|
+        raise OptionParser::InvalidArgument, megabytes.to_s if megabytes < 0
+
+        options[:memory_limit] = megabytes
+      end
+
       opts.on("--fork", "Run each mutant in a forked child",
               "The heckle process never loads a mutant") do
         unless Process.respond_to?(:fork)
@@ -263,7 +272,25 @@ class HeckleRunner
     end
 
     puts "Timeout set to #{Heckle.timeout} seconds."
+    puts memory_limit
 
     passed
+  end
+
+  # Sets Heckle.memory_limit and returns the line that says what it is.
+  # Measured after the unmutated run, which has grown the heap to what
+  # the tests need.
+  def memory_limit
+    megabytes = @options[:memory_limit]
+    Heckle.memory_limit = nil
+    return "Memory limit off." if megabytes == 0
+
+    unless Heckle::Memory.readable?
+      return "Memory limit not enforced: resident memory cannot be read on this platform."
+    end
+
+    limit = megabytes ? megabytes * Heckle::Memory::MB : Heckle::Memory.default_limit(Heckle::Memory.resident)
+    Heckle.memory_limit = limit
+    "Memory limit set to #{limit / Heckle::Memory::MB} MB."
   end
 end
