@@ -689,6 +689,38 @@ class TestHeckle < Minitest::Test
     assert out.end_with?(" end\n\n1 of 2 mutants survived\n\n"), out
   end
 
+  def test_reporter_warning_and_info_text
+    reporter = Heckle::Reporter.new
+
+    assert_output("#{'!' * 70}\n!!! careful\n#{'!' * 70}\n\n") { reporter.warning "careful" }
+    assert_output("#{'*' * 70}\n***  note\n#{'*' * 70}\n\n") { reporter.info "note" }
+    assert_output("\nThe following mutations didn't cause test failures:\n\n") { reporter.no_failures }
+  end
+
+  def test_reporter_diff_has_no_hunk_header
+    out, _err = capture_io { Heckle::Reporter.new.diff("a\nb\n", "a\nc\n") }
+
+    assert_equal "--- original\n+++ mutation\n a\n-b\n+c\n\n", out
+  end
+
+  def test_reporter_replacing_text
+    out, _err = capture_io { Heckle::Reporter.new.replacing("K", :m, "a\nb\n", "a\nc\n") }
+
+    assert_equal "Replacing K#m with:\n\n--- original\n+++ mutation\n a\n-b\n+c\n\n", out
+  end
+
+  def test_reporter_test_failures_only_in_debug
+    debug = Heckle.debug
+    reporter = Heckle::Reporter.new
+
+    Heckle.debug = false
+    assert_output("") { reporter.report_test_failures }
+    Heckle.debug = true
+    assert_output("Tests failed -- this is good\n") { reporter.report_test_failures }
+  ensure
+    Heckle.debug = debug
+  end
+
   def test_real_reporter_totals_without_survivors
     heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { false }
 
