@@ -670,6 +670,33 @@ class TestHeckle < Minitest::Test
     assert_equal threads, Thread.list.size
   end
 
+  # A memory read slower than the poll interval (ps on a loaded machine)
+  # must still let a finished run stop the watchdog. Otherwise the run
+  # waits on the watchdog's lock until the watchdog ends the process.
+  def test_slow_memory_reads_do_not_keep_a_finished_run_waiting
+    script = <<~'RUBY'
+      require "heckle"
+      Heckle::Memory.singleton_class.prepend(Module.new do
+        def resident(_pid = Process.pid)
+          sleep 0.3
+          1
+        end
+      end)
+      dog = Heckle::Watchdog.new(0.5, "watchdog ended the process\n",
+                                 memory_limit: 2**60, memory_report: ->(_r) { "over\n" })
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      dog.watch { sleep 0.05 }
+      took = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      puts took < 0.5 ? "returned" : "returned late"
+      sleep 1
+      puts "quiet"
+    RUBY
+    run = BoundedProcess.capture3(RbConfig.ruby, "-I", LIB, "-e", script, seconds: 20)
+
+    assert_equal ["returned\nquiet\n", ""], [run.out, run.err]
+    assert_equal 0, run.status.exitstatus
+  end
+
   def test_plain_diff_matches_diff_output_for_a_mutant
     heckler = heckle("HeckleSubjects", "pair", [:lit])
     original = heckler.original_source

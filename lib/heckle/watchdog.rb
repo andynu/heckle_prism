@@ -114,9 +114,11 @@ class Heckle
         give_up = nil
         until @done
           time = now
+          # Timed from the end of the read, so the wait below always
+          # happens and releases the lock even when a read is slow.
           if @memory_limit && time >= next_poll
             check_memory
-            next_poll = time + Memory.poll_interval
+            next_poll = now + Memory.poll_interval
           end
           if time >= next_raise
             give_up ||= time + GRACE
