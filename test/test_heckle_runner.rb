@@ -246,6 +246,52 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 0, run.status.exitstatus
   end
 
+  # Each test swallows one timeout and then passes. Once the timeout has
+  # fired, the run's outcome says nothing, so the second mutant is not a
+  # survivor even though every test passed.
+  def test_timeout_swallowed_once_counts_as_a_timeout
+    run = bounded_heckle(*IMPORTER, "-t", "runaway/stubborn_importer_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_includes run.out, TIMEOUT_WARNING
+    assert_includes run.out, "-  (@sheet.first..@sheet.last).each { rows += 1 }\n+  (nil..@sheet.last)"
+    assert_includes run.out, "1 of 2 mutants survived"
+    assert_equal 1, run.status.exitstatus
+  end
+
+  # import_retrying swallows every timeout, so the watchdog ends the process
+  # without running at_exit handlers.
+  def test_timeout_swallowed_for_good_ends_the_process
+    run = bounded_heckle("Importer", "count_to_last", "-n", "call", "-T", "1",
+                         "-t", "runaway/retrying_importer_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert_operator run.elapsed, :<, 1 + Heckle::Watchdog::GRACE + 5
+    assert_includes run.err, "heckle: Importer#count_to_last: the tests were still running"
+    assert_includes run.err, "swallowed"
+    assert_includes run.err, "--- original\n+++ mutation\n def count_to_last\n   rows = 0\n" \
+                             "-  (1..@sheet.last).each { rows += 1 }\n+  (1..nil).each { rows += 1 }\n" \
+                             "   rows\n end\n"
+    assert_includes run.err, "--fork"
+    refute_includes run.err, "at_exit ran"
+    assert_includes run.out, "1 mutations remaining...\n"
+    refute_includes run.out, "Heckle Results"
+  end
+
+  # What the report advises: the child is killed and the run goes on.
+  def test_timeout_swallowed_for_good_is_contained_by_fork
+    run = bounded_heckle("Importer", "count_to_last", "-n", "call", "-T", "1", "--fork",
+                         "-t", "runaway/retrying_importer_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "at_exit ran\n", run.err
+    assert_includes run.out, TIMEOUT_WARNING
+    assert_includes run.out, "0 of 1 mutants survived"
+    assert_equal 0, run.status.exitstatus
+  end
+
   # One pipe for both streams, as with 2>&1 into a file.
   def test_stdout_is_not_reordered_against_stderr
     out, status = Open3.capture2e(RbConfig.ruby, BIN, "Doubler", "double", "-T", "7", *BROKEN, chdir: PROJECT)

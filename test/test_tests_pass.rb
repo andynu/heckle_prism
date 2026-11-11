@@ -116,6 +116,7 @@ class TestTestsPass < Minitest::Test
 
   def test_timeout_escapes_the_test
     assert_drive "Heckle::Timeout\nruns=1\n", <<~RUBY
+      require "timeout"
       class SlowTest < Minitest::Test
         def test_a; sleep 5; end
         def test_b; sleep 5; end

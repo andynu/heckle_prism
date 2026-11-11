@@ -1,7 +1,8 @@
 # Application code that rescues broadly around a loop. With -n call,
 # count_rows has two mutants: @sheet.first replaced by nil raises a
 # TypeError at once, and @sheet.last replaced by nil makes the range
-# endless, so the loop spins forever without allocating.
+# endless, so the loop spins forever without allocating. count_to_last
+# has only the second.
 class Importer
   def initialize(sheet)
     @sheet = sheet
@@ -10,6 +11,12 @@ class Importer
   def count_rows
     rows = 0
     (@sheet.first..@sheet.last).each { rows += 1 }
+    rows
+  end
+
+  def count_to_last
+    rows = 0
+    (1..@sheet.last).each { rows += 1 }
     rows
   end
 
@@ -26,7 +33,7 @@ class Importer
   end
 
   def import_retrying
-    count_rows
+    count_to_last
   rescue Exception
     retry
   end

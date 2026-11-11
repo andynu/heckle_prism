@@ -1,5 +1,4 @@
 require "prism"
-require "timeout"
 require "tempfile"
 require "minitest"
 require "heckle/version"
@@ -7,18 +6,12 @@ require "heckle/method_finder"
 require "heckle/mutation"
 require "heckle/mutator"
 require "heckle/forking"
+require "heckle/watchdog"
 
 ##
 # Test Unit Sadism
 
 class Heckle
-
-  ##
-  # Raised in the test run when it outlives the timeout. Not a
-  # StandardError, so that neither a bare rescue nor a rescue of
-  # StandardError in the code under test can swallow it.
-
-  class Timeout < Exception; end
 
   # Minitest records any other exception as a test error, which would spend
   # the timeout on one test and let the next one loop forever.
@@ -287,6 +280,8 @@ class Heckle
   # Any exception other than SyntaxError, a timeout or Interrupt propagates,
   # with the original method restored. In fork mode the tests' exceptions
   # stay in the child, which is warned about and not counted a survivor.
+  # In-process, a test run that swallows its timeout ends the process
+  # (see Watchdog).
 
   def validate
     @count = 0
@@ -313,8 +308,9 @@ class Heckle
         if @@fork then
           run_forked mutation
         else
+          report = swallowed_timeout_report
           install mutation
-          ::Timeout::timeout(@@timeout, Heckle::Timeout) { run_tests }
+          run_tests report
         end
       rescue SyntaxError => e
         @reporter.warning "Mutation caused a syntax error:\n\n#{e.message}"
@@ -462,12 +458,53 @@ class Heckle
     (@random ||= Random.new).rand(max)
   end
 
-  def run_tests
-    if tests_pass? then
+  # Once the timeout has fired the outcome says nothing, even if the code
+  # under test swallowed it and the tests went on to pass.
+  def run_tests(report)
+    watchdog = Watchdog.new(@@timeout, report)
+    passed = watchdog.watch { tests_pass? }
+    raise Heckle::Timeout if watchdog.fired?
+
+    if passed then
       record_passing_mutation
     else
       @reporter.report_test_failures
     end
+  end
+
+  # Built before install, from strings only, since the watchdog writes it
+  # while the mutant is still running.
+  def swallowed_timeout_report
+    <<~TEXT
+      heckle: #{klass_name}##{method_name}: the tests were still running #{Watchdog::GRACE} seconds
+      after the #{@@timeout} second timeout was raised in them. The code under test
+      swallowed the timeout, with a rescue of Exception or a retry, say.
+      Heckle ended the process without restoring the method, printing
+      results or running at_exit handlers. The mutant:
+
+      #{plain_diff(dedent(original_source), dedent(@current_mutant))}
+      Run heckle with --fork to contain a mutant like this one: each mutant
+      then runs in a child process, which heckle kills when it runs over.
+    TEXT
+  end
+
+  # Both texts in full, as "diff -U" with the whole text as context shows
+  # a mutation, which changes one run of lines. Needs no diff(1) process.
+  def plain_diff(original, mutant)
+    before = original.split("\n")
+    after = mutant.split("\n")
+    shorter = [before.size, after.size].min
+    head = 0
+    head += 1 while head < shorter && before[head] == after[head]
+    tail = 0
+    tail += 1 while tail < shorter - head && before[-1 - tail] == after[-1 - tail]
+
+    lines = ["--- original", "+++ mutation"]
+    lines.concat(before.first(head).map { |line| " #{line}" })
+    lines.concat(before[head...(before.size - tail)].map { |line| "-#{line}" })
+    lines.concat(after[head...(after.size - tail)].map { |line| "+#{line}" })
+    lines.concat(before.last(tail).map { |line| " #{line}" })
+    lines.join("\n") + "\n"
   end
 
   def record_passing_mutation

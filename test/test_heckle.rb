@@ -640,6 +640,44 @@ class TestHeckle < Minitest::Test
     assert_equal [1, 2], HeckleSubjects.new.pair
   end
 
+  def test_watchdog_thread_ends_with_each_run
+    threads = Thread.list.size
+    seen = []
+    heckler = scripted("HeckleSubjects", "pair", [:lit]) do |h|
+      seen << Thread.list.size
+      sleep 5 if h.count == 1
+      false
+    end
+
+    with_timeout(0.2) { heckler.validate }
+
+    assert_equal [threads + 1] * 2, seen
+    assert_equal threads, Thread.list.size
+  end
+
+  def test_interrupt_in_process_is_reported_and_loop_continues
+    reporter = RecordingReporter.new
+    heckler = NoPauseHeckler.new("HeckleSubjects", "pair", [:lit], reporter)
+    heckler.script = ->(h) { h.count == 1 ? raise(Interrupt) : false }
+    (@hecklers ||= []) << heckler
+    threads = Thread.list.size
+
+    assert_equal true, heckler.validate
+    assert_includes reporter.calls, [:warning, "Mutation canceled, hit ^C again to exit"]
+    assert_equal [[2]], heckler.sleeps
+    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal threads, Thread.list.size
+  end
+
+  def test_plain_diff_matches_diff_output_for_a_mutant
+    heckler = heckle("HeckleSubjects", "pair", [:lit])
+    original = heckler.original_source
+    mutant = heckler.mutant_source(heckler.mutations.first)
+
+    out, _err = capture_io { Heckle::Reporter.new.diff(original, mutant) }
+    assert_equal out.chomp, heckler.send(:plain_diff, original, mutant)
+  end
+
   def test_timeout_is_not_caught_by_a_bare_rescue
     refute_operator Heckle::Timeout, :<=, StandardError
     assert_includes Minitest::Test::PASSTHROUGH_EXCEPTIONS, Heckle::Timeout
