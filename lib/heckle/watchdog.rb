@@ -85,16 +85,17 @@ class Heckle
     end
 
     ##
-    # Runs the block and returns its value. Heckle::Timeout is held off
-    # outside the block itself, so it never lands in this method's own
-    # bookkeeping; one raised as the block returns arrives on the way out.
+    # Runs the block and returns its value. Asynchronous exceptions
+    # (Heckle::Timeout, ^C) are held off outside the block itself, so none
+    # lands in this method's own bookkeeping and leaves the watchdog
+    # running; one raised as the block returns arrives on the way out.
 
     def watch
       target = Thread.current
-      Thread.handle_interrupt(Heckle::Timeout => :never) do
+      Thread.handle_interrupt(Object => :never) do
         patrol = Thread.new { patrol(target) }
         begin
-          Thread.handle_interrupt(Heckle::Timeout => :immediate) { yield }
+          Thread.handle_interrupt(Object => :immediate) { yield }
         ensure
           @lock.synchronize do
             @done = true

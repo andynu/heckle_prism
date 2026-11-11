@@ -670,6 +670,45 @@ class TestHeckle < Minitest::Test
     assert_equal threads, Thread.list.size
   end
 
+  # ^C as the run returns, while the watchdog's thread holds its lock (here
+  # in a slow memory read), must still stop the watchdog, or it raises a
+  # stray timeout into whatever runs next and later ends the process.
+  def test_interrupt_as_the_run_returns_still_stops_the_watchdog
+    script = <<~'RUBY'
+      require "heckle"
+      $stdout.sync = true
+      Heckle::Memory.singleton_class.prepend(Module.new do
+        def resident(_pid = Process.pid)
+          sleep 0.3
+          1
+        end
+      end)
+      main = Thread.current
+      dog = Heckle::Watchdog.new(0.5, "watchdog ended the process\n",
+                                 memory_limit: 2**60, memory_report: ->(_r) { "over\n" })
+      returned = false
+      Thread.new do
+        sleep 0.01 until returned && main.status == "sleep"
+        main.raise(Interrupt)
+      end
+      begin
+        dog.watch { sleep 0.05; returned = true }
+      rescue Interrupt
+        puts "interrupt"
+      end
+      begin
+        sleep 3
+        puts "quiet"
+      rescue Heckle::Timeout
+        puts "stray timeout"
+      end
+    RUBY
+    run = BoundedProcess.capture3(RbConfig.ruby, "-I", LIB, "-e", script, seconds: 20)
+
+    assert_equal ["interrupt\nquiet\n", ""], [run.out, run.err]
+    assert_equal 0, run.status.exitstatus
+  end
+
   # A memory read slower than the poll interval (ps on a loaded machine)
   # must still let a finished run stop the watchdog. Otherwise the run
   # waits on the watchdog's lock until the watchdog ends the process.
