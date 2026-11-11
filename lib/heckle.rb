@@ -406,6 +406,13 @@ class Heckle
 
   private
 
+  # The source for the rand_* methods. Not Kernel#rand: Minitest reseeds
+  # the global generator on every suite run, which would repeat the same
+  # replacements for each method heckled after one.
+  def rand(max)
+    (@random ||= Random.new).rand(max)
+  end
+
   def run_tests
     if tests_pass? then
       record_passing_mutation

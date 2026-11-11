@@ -57,6 +57,20 @@ class TestTestsPass < Minitest::Test
     RUBY
   end
 
+  # Each suite run reseeds the global RNG with Minitest.seed, so with one
+  # test class the global state after every run is the same. Twenty draws
+  # repeat by chance with probability 200**-20.
+  def test_suite_runs_do_not_repeat_random_replacements
+    assert_drive "false\nruns=2\n", <<~RUBY
+      Heckle.load_tests(["test/test_doubler_with_a_number.rb", "test/test_helper.rb"])
+      draws = [Heckle.new("Doubler", "double"), Heckle.new("Halver", "halve")].map do |heckle|
+        heckle.tests_pass?
+        Array.new(20) { heckle.rand_number }
+      end
+      p draws.first == draws.last
+    RUBY
+  end
+
   def test_skips_count_as_passing
     assert_drive "true\nruns=1\n", <<~RUBY
       class SkippingTest < Minitest::Test
