@@ -13,7 +13,12 @@ require "heckle/forking"
 
 class Heckle
 
-  class Timeout < ::Timeout::Error; end
+  ##
+  # Raised in the test run when it outlives the timeout. Not a
+  # StandardError, so that neither a bare rescue nor a rescue of
+  # StandardError in the code under test can swallow it.
+
+  class Timeout < Exception; end
 
   # Minitest records any other exception as a test error, which would spend
   # the timeout on one test and let the next one loop forever.

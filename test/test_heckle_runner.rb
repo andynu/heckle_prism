@@ -2,6 +2,7 @@ require "minitest/autorun"
 require "open3"
 require "rbconfig"
 require "heckle_runner"
+require "bounded_process"
 
 # bin/heckle runs Minitest in-process, so it is exercised as a subprocess in
 # the fixture project.
@@ -222,6 +223,27 @@ class TestHeckleRunner < Minitest::Test
     assert_includes out, "Initial tests failed but you forced things. Let's rumble."
     assert_includes out, "No mutants survived."
     assert_equal 0, status.exitstatus
+  end
+
+  # For mutants that run away: a heckle that fails to contain one is
+  # killed by the backstop, and the test fails, instead of the machine.
+  def bounded_heckle(*args, seconds: 30)
+    BoundedProcess.capture3(RbConfig.ruby, BIN, *args, chdir: PROJECT, seconds: seconds)
+  end
+
+  IMPORTER = %w[Importer count_rows -n call -T 1].freeze
+  TIMEOUT_WARNING = "!!! Your tests timed out. Heckle may have caused an infinite loop.\n".freeze
+
+  # The second mutant makes count_rows loop forever. The application
+  # rescues StandardError around it, and a second test calls it again.
+  def test_timeout_is_not_swallowed_by_a_rescue_of_standard_error
+    run = bounded_heckle(*IMPORTER, "-t", "runaway/importer_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_includes run.out, TIMEOUT_WARNING
+    assert_includes run.out, "0 of 2 mutants survived"
+    assert_equal 0, run.status.exitstatus
   end
 
   # One pipe for both streams, as with 2>&1 into a file.

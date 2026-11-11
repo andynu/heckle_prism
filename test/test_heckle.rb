@@ -640,6 +640,22 @@ class TestHeckle < Minitest::Test
     assert_equal [1, 2], HeckleSubjects.new.pair
   end
 
+  def test_timeout_is_not_caught_by_a_bare_rescue
+    refute_operator Heckle::Timeout, :<=, StandardError
+    assert_includes Minitest::Test::PASSTHROUGH_EXCEPTIONS, Heckle::Timeout
+
+    caught = begin
+      begin
+        raise Heckle::Timeout
+      rescue
+        :bare_rescue
+      end
+    rescue Heckle::Timeout
+      :passed_through
+    end
+    assert_equal :passed_through, caught
+  end
+
   def test_syntax_error_is_reported_and_loop_continues
     reporter = RecordingReporter.new
     heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) do |h|
