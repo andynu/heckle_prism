@@ -76,9 +76,10 @@ class HeckleRunner
         options[:nodes] = Heckle::BRANCH_NODES
       end
 
-      opts.on("-T", "--timeout SECONDS", "The maximum time for a test run in seconds",
-                                         "Used to catch infinite loops") do |timeout|
-        timeout = timeout.to_i
+      opts.on("-T", "--timeout SECONDS", Integer, "The maximum time for a test run in seconds",
+                                                  "Used to catch infinite loops") do |timeout|
+        raise OptionParser::InvalidArgument, timeout.to_s if timeout < 1
+
         puts "Setting timeout at #{timeout} seconds."
         options[:timeout] = timeout
       end

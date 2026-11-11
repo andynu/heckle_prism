@@ -373,6 +373,14 @@ class TestHeckleRunner < Minitest::Test
                  out.lines.map(&:chomp)
   end
 
+  # "abc".to_i is 0, and a zero timeout meant no timeout in-process and an
+  # instant one in fork mode.
+  def test_timeout_must_be_a_positive_whole_number_of_seconds
+    assert_aborts "invalid argument: -T 0", "Doubler", "double", "-T", "0"
+    assert_aborts "invalid argument: --timeout -3", "Doubler", "double", "--timeout", "-3"
+    assert_aborts "invalid argument: -T soon", "Doubler", "double", "-T", "soon"
+  end
+
   def test_timeout_guess
     out, _err, _status = heckle("Doubler", "double", "-n", "if")
 
