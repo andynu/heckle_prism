@@ -41,9 +41,9 @@ It's like hiring a white-hat hacker to try to break into your server and making 
 == SYNOPSIS:
 
 Run heckle from the root of your project. It loads the files matching the
-test pattern (test/test_*.rb by default) with lib and test on the load
-path, so your tests must require the code they test. The unmutated tests
-are run once first and must pass.
+test pattern (test/**/test_*.rb and test/**/*_test.rb by default) with
+lib and test on the load path, so your tests must require the code they
+test. The unmutated tests are run once first and must pass.
 
     % heckle Doubler                  # every method Doubler defines
     % heckle Doubler double           # one instance method
@@ -72,10 +72,57 @@ Each mutant the tests did not catch is printed as a diff against the
 original method. The exit status is 0 when every mutant was caught and 1
 otherwise.
 
+== USING HECKLE IN A PROJECT:
+
+This version of heckle is not published as a gem. Add it to the
+project's Gemfile by path:
+
+    gem "heckle", path: "/path/to/heckle", group: :test
+
+Run bundle install, then run heckle with bundle exec from the project
+root:
+
+    % bundle exec heckle Widget                # every method Widget defines
+    % bundle exec heckle Widget label          # one instance method
+    % bundle exec heckle Widget self.restock   # one class method
+
+Every mutant runs every loaded test, so the time a heckle run takes is
+the number of mutants times the time of the whole loaded suite. Use -t
+to load only the tests that cover the class:
+
+    % bundle exec heckle Widget -t test/models/widget_test.rb
+
+The exit status is 0 when no mutant survived, which includes a class or
+method with nothing to mutate. It is 1 when at least one mutant
+survived, and also on a usage error or when the unmutated tests fail
+without -F.
+
+Rails works. It was tried on a Rails 8.1 application with SQLite and the
+default minitest setup: all three forms above ran, the suite did not
+run again at exit, and rows created by tests were rolled back between
+mutant runs as they are in rails test. The parallelize line was removed
+from test/test_helper.rb first, and heckle has not been tried with it.
+For a model, heckle Widget prints a "Skipping" line for each method
+Rails generates in the class (such as self.__class_attr___callbacks);
+these are not written with def and can be ignored.
+
+Known limits:
+
+* Only methods written with def are heckled. Methods made by
+  define_method, attr_accessor, class_attribute and similar are skipped.
+* Mutants run inside the heckle process. Tests that start a subprocess
+  (a system call, a forked server) run the original code, not the
+  mutant, so they cannot catch it.
+* A mutant can change state that outlives one test run, such as a
+  global, a class variable or a cache, and that change is seen by the
+  runs of later mutants.
+
 == REQUIREMENTS:
 
-* Ruby with Prism 2.1 or later
-* minitest 6.1 or later
+* Ruby 4.0.9. Older Rubies have not been tried.
+* prism 1.5.1 or later. 1.5.1, 1.8.0, 1.8.2, 1.9.0 and 2.1.0 pass the
+  test suite; 1.4.0 does not.
+* minitest 5.27.0 or later. 5.27.0, 6.0.6 and 6.1.0 pass the test suite.
 * diff(1) on the PATH, which prints each surviving mutant against the
   original method
 
@@ -83,7 +130,8 @@ ruby2ruby, ParseTree and ruby_parser are no longer used.
 
 == INSTALL:
 
-* gem install heckle
+* Add the Gemfile line under USING HECKLE IN A PROJECT, or run
+  bin/heckle from a checkout.
 
 == LICENSE:
 
