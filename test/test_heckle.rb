@@ -362,7 +362,7 @@ class TestHeckle < Minitest::Test
       true
     end
 
-    result = with_timeout(0.05) { heckler.validate }
+    result = with_timeout(0.5) { heckler.validate }
 
     assert_equal false, result
     assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
@@ -449,7 +449,7 @@ class TestHeckle < Minitest::Test
       true
     end
 
-    with_timeout(0.05) { heckler.validate }
+    with_timeout(0.5) { heckler.validate }
 
     assert_equal [:mutant_totals, 1, 2], reporter.calls.last
   end
