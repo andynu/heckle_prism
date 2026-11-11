@@ -829,6 +829,53 @@ class TestMutator < Minitest::Test
     assert_mutants expected, inline_mutants(source, :call)
   end
 
+  def test_mutation_containing_a_backtick_heredoc_opening_is_dropped
+    source = <<~'SOURCE'
+      def m
+        foo(<<~`X`, baz)
+          ls
+        X
+      end
+    SOURCE
+    expected = <<~'RUBY'
+      def m
+        foo(<<~`X`, nil)
+          ls
+        X
+      end
+    RUBY
+
+    assert_mutants [expected], inline_mutants(source, :call)
+  end
+
+  def test_mutation_containing_an_interpolated_backtick_heredoc_opening_is_dropped
+    source = <<~'SOURCE'
+      def m
+        foo(<<~`X`, baz)
+          ls #{bar}
+        X
+      end
+    SOURCE
+    expected = [
+      <<~'RUBY',
+        def m
+          foo(<<~`X`, nil)
+            ls #{bar}
+          X
+        end
+      RUBY
+      <<~'RUBY',
+        def m
+          foo(<<~`X`, baz)
+            ls #{nil}
+          X
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, inline_mutants(source, :call)
+  end
+
   def test_heredoc_receiver_drops_the_call
     source = "def m\n  <<~X.strip\n    a\n  X\nend\n"
 
