@@ -1,16 +1,6 @@
 module HeckleBlocks
   SCALE = 10
 
-  Point = Data.define(:x, :y) do
-    def sum
-      x + y + 1
-    end
-
-    def self.origin_sum
-      42
-    end
-  end
-
   Pair = Struct.new(:a, :b) do
     def scaled
       a * SCALE + 1

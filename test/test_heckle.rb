@@ -4,6 +4,7 @@ require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
 require "fixtures/heckle_blocks"
 require "fixtures/heckle_shorthand" if RUBY_VERSION >= "3.1"
+require "fixtures/heckle_data" if RUBY_VERSION >= "3.2"
 require "heckle"
 
 class TestHeckler < Heckle
@@ -139,20 +140,23 @@ class TestHeckle < Minitest::Test
     assert_equal 11, HeckleNesting::Inner.new.limit
   end
 
-  def test_install_and_restore_data_define_method
-    heckler = install_only("HeckleBlocks::Point", "sum", [:lit])
+  # Data arrived in Ruby 3.2.
+  if RUBY_VERSION >= "3.2"
+    def test_install_and_restore_data_define_method
+      heckler = install_only("HeckleBlocks::Point", "sum", [:lit])
 
-    assert_equal 14, HeckleBlocks::Point.new(x: 3, y: 5).sum
-    heckler.restore
-    assert_equal 9, HeckleBlocks::Point.new(x: 3, y: 5).sum
-  end
+      assert_equal 14, HeckleBlocks::Point.new(x: 3, y: 5).sum
+      heckler.restore
+      assert_equal 9, HeckleBlocks::Point.new(x: 3, y: 5).sum
+    end
 
-  def test_install_and_restore_data_define_self_method
-    heckler = install_only("HeckleBlocks::Point", "self.origin_sum", [:lit])
+    def test_install_and_restore_data_define_self_method
+      heckler = install_only("HeckleBlocks::Point", "self.origin_sum", [:lit])
 
-    assert_equal 47, HeckleBlocks::Point.origin_sum
-    heckler.restore
-    assert_equal 42, HeckleBlocks::Point.origin_sum
+      assert_equal 47, HeckleBlocks::Point.origin_sum
+      heckler.restore
+      assert_equal 42, HeckleBlocks::Point.origin_sum
+    end
   end
 
   def test_install_and_restore_struct_method_using_module_constant
