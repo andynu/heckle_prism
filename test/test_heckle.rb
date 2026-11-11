@@ -1,4 +1,6 @@
 require "minitest/autorun"
+require "open3"
+require "rbconfig"
 require "fixtures/heckle_dummy"
 require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
@@ -61,8 +63,16 @@ class TestHeckle < Minitest::Test
     heckler
   end
 
+  # In-process unless a test says otherwise, whatever heckle --fork set
+  # when this suite is itself heckled.
+  def setup
+    @fork = Heckle.fork?
+    Heckle.fork = false
+  end
+
   def teardown
     (@hecklers || []).each(&:restore)
+    Heckle.fork = @fork
   end
 
   # Installs the only mutation of klass_name#method_name of the given kinds.
@@ -907,7 +917,11 @@ class TestHeckle < Minitest::Test
   end
 
   def test_fork_setting_is_off_by_default
-    assert_equal false, Heckle.fork?
+    lib = File.expand_path("../lib", __dir__)
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib, "-e", 'require "heckle"; p Heckle.fork?')
+
+    assert status.success?, err
+    assert_equal "false\n", out
   end
 
   def test_fork_reports_like_in_process
