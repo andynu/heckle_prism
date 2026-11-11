@@ -177,10 +177,25 @@ Known limits:
 
 == REQUIREMENTS:
 
-* Ruby 4.0.9. Older Rubies have not been tried.
+* Ruby 2.7 or later, which is every Ruby that prism installs on. The
+  test suite passes on 2.7.8, 3.0.7, 3.1.7, 3.2.11, 3.3.13, 3.4.12 and
+  4.0.9.
 * prism 1.5.1 or later. 1.5.1, 1.8.0, 1.8.2, 1.9.0 and 2.1.0 pass the
-  test suite; 1.4.0 does not.
-* minitest 5.27.0 or later. 5.27.0, 6.0.6 and 6.1.0 pass the test suite.
+  test suite; 1.4.0 does not. Ruby 3.3 ships prism 0.19, so a newer
+  prism gem is installed there. Before Ruby 3.3 there is no prebuilt
+  prism 2 gem and it compiles on install. On Ruby 2.7 the RubyGems and
+  Bundler that come with it pick a prebuilt gem that needs Ruby 3.3 and
+  stop: use "gem install prism --platform ruby", or set Bundler's
+  force_ruby_platform.
+* minitest 5.16.0 or later. 5.16.0, 5.21.0, 5.26.1, 5.27.0, 6.0.6 and
+  6.1.0 pass the test suite on at least one Ruby. The minitest that
+  comes with Ruby 2.7, 3.0 and 3.1 (5.13 to 5.15) is too old, so a newer
+  one is installed there. On Ruby 3.4 use minitest 5.25 or later:
+  5.16 to 5.20 need mutex_m, which Ruby 3.4 no longer includes.
+* With prism 1, a block whose parameter is named "it" loses that
+  parameter's mutant on Ruby 3.3 and earlier, because prism 1 reads the
+  source as the newest Ruby would. prism 2 reads it as the running Ruby
+  does.
 * diff(1) on the PATH, which prints each surviving mutant against the
   original method
 
