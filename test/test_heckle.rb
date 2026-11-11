@@ -3,6 +3,7 @@ require "fixtures/heckle_dummy"
 require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
 require "fixtures/heckle_blocks"
+require "fixtures/heckle_shorthand" if RUBY_VERSION >= "3.1"
 require "heckle"
 
 class TestHeckler < Heckle
@@ -269,7 +270,7 @@ class TestHeckle < Minitest::Test
     heckler = install_only("HeckleSubjects", "answer", [:lit])
     heckler.restore
 
-    assert_equal [SUBJECTS, 8], location.first(2)
+    assert_equal [SUBJECTS, 4], location.first(2)
     assert_equal location, HeckleSubjects.instance_method(:answer).source_location
   end
 
@@ -279,8 +280,8 @@ class TestHeckle < Minitest::Test
     error = assert_raises(ArgumentError) { HeckleSubjects.new.explode }
     assert_equal "l33t h4x0r", error.message
     frame = error.backtrace_locations.first
-    assert_equal [SUBJECTS, 28], [frame.path, frame.lineno]
-    assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[27].strip
+    assert_equal [SUBJECTS, 24], [frame.path, frame.lineno]
+    assert_equal "raise ArgumentError, \"kaboom\"", File.readlines(SUBJECTS)[23].strip
   end
 
   def test_install_and_restore_initialize_silently_under_verbose
@@ -678,9 +679,9 @@ class TestHeckle < Minitest::Test
   end
 
   def test_inherited_method_is_not_the_class_own
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjectsChild", "label_shorthand") }
+    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjectsChild", "answer") }
 
-    assert_includes error.message, "HeckleSubjectsChild#label_shorthand"
+    assert_includes error.message, "HeckleSubjectsChild#answer"
     assert_includes error.message, "HeckleSubjects"
   end
 
@@ -743,12 +744,16 @@ class TestHeckle < Minitest::Test
     assert_includes error.message, "bogus"
   end
 
-  def test_unparsable_mutants_are_dropped
-    def_node = Heckle::MethodFinder.new(File.read(SUBJECTS)).find("HeckleSubjects", "label_shorthand").def_node
-    raw = Heckle::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
+  # The mutant that does not parse comes from `{foo:}`, Ruby 3.1 syntax.
+  if RUBY_VERSION >= "3.1"
+    def test_unparsable_mutants_are_dropped
+      shorthand = File.expand_path("fixtures/heckle_shorthand.rb", __dir__)
+      def_node = Heckle::MethodFinder.new(File.read(shorthand)).find("HeckleShorthand", "label_shorthand").def_node
+      raw = Heckle::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
 
-    assert_equal [:lit], raw.map(&:kind)
-    assert_empty heckle("HeckleSubjects", "label_shorthand", [:lit]).mutations
+      assert_equal [:lit], raw.map(&:kind)
+      assert_empty heckle("HeckleShorthand", "label_shorthand", [:lit]).mutations
+    end
   end
 
   def test_random_helpers
