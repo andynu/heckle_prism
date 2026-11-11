@@ -250,6 +250,25 @@ class TestHeckleRunner < Minitest::Test
     assert_equal 1, status.exitstatus
   end
 
+  # quarter survives under halver_test.rb alone and dies once test_quarter.rb
+  # is loaded as well.
+  def test_tests_option_repeated_loads_every_pattern
+    alone, _err, status = heckle("Halver", "-t", "test/units/h*_test.rb")
+    assert_includes alone, "Passed    :   1\nFailed    :   1\n"
+    assert_equal 1, status.exitstatus
+
+    both, err, status = heckle("Halver", "-t", "test/units/h*_test.rb", "-t", "test/units/test_quarter.rb")
+    assert_equal "", err
+    assert_includes both, "Passed    :   2\nFailed    :   0\n"
+    assert_equal 0, status.exitstatus
+  end
+
+  # A typo in one -t would otherwise silently narrow the tests.
+  def test_tests_option_pattern_matching_nothing_aborts_among_others
+    assert_aborts "No test files match test/unit/test_quarter.rb", "Halver",
+                  "-t", "test/units/h*_test.rb", "-t", "test/unit/test_quarter.rb"
+  end
+
   # halve is fully covered by test/units/halver_test.rb; quarter not at all.
   def test_whole_class_totals_with_a_mix
     out, _err, _status = heckle("Halver", "-t", "test/units/*_test.rb")
@@ -301,6 +320,7 @@ class TestHeckleRunner < Minitest::Test
     refute_includes out, "--focus"
     refute_includes out, "sauron"
     assert_includes out, "default: test/**/test_*.rb and test/**/*_test.rb"
+    assert_includes out, "Repeat to load more"
     assert_equal 0, status.exitstatus
   end
 
@@ -331,6 +351,19 @@ class TestHeckleRunner < Minitest::Test
     assert_nil options[:timeout]
     refute options.key?(:focus)
     assert_equal "", out
+  end
+
+  def test_parse_args_single_tests_option_replaces_the_defaults
+    options, _rest, _out = parse("-t", "spec/*_spec.rb", "Doubler")
+
+    assert_equal %w[spec/*_spec.rb], options[:test_pattern]
+  end
+
+  def test_parse_args_tests_option_accumulates
+    options, rest, _out = parse("-t", "test/models/a*_test.rb", "Doubler", "--tests", "test/models/b_test.rb")
+
+    assert_equal %w[test/models/a*_test.rb test/models/b_test.rb], options[:test_pattern]
+    assert_equal %w[Doubler], rest
   end
 
   def test_parse_args_leaves_timeout_guess_unless_given

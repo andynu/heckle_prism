@@ -37,6 +37,8 @@ class HeckleRunner
       :test_pattern => DEFAULT_TEST_PATTERNS,
     }
 
+    tests = []
+
     OptionParser.new do |opts|
       opts.version = Heckle::VERSION
       opts.program_name = File.basename $0
@@ -47,8 +49,9 @@ class HeckleRunner
 
       opts.on("-t", "--tests TEST_PATTERN",
               "Location of tests (glob)",
+              "Repeat to load more; any -t replaces the default",
               "default: #{DEFAULT_TEST_PATTERNS.join(' and ')}") do |pattern|
-        options[:test_pattern] = pattern
+        tests << pattern
       end
 
       opts.on("-F", "--force", "Ignore initial test failures") do
@@ -93,6 +96,8 @@ class HeckleRunner
         puts "Mutating without nodes: #{exclusions.inspect}"
       end
     end.parse! argv
+
+    options[:test_pattern] = tests unless tests.empty?
 
     p options if options[:debug]
 
@@ -164,12 +169,16 @@ class HeckleRunner
     raise Error, "Unknown mutation kind: #{unknown.join(',')}" unless unknown.empty?
   end
 
+  # Each given pattern must match a file, since a mistyped one would quietly
+  # leave its tests out. A project need only match one default pattern.
   def load_tests
     patterns = Array(@options[:test_pattern])
-    files = Dir.glob(patterns).uniq
-    raise Error, "No test files match #{patterns.join(' or ')}" if files.empty?
+    matches = patterns.map { |pattern| Dir.glob(pattern) }
+    empty = patterns.zip(matches).select { |_pattern, files| files.empty? }.map(&:first)
+    empty = [] if patterns == DEFAULT_TEST_PATTERNS && empty.size < patterns.size
+    raise Error, "No test files match #{empty.join(' or ')}" unless empty.empty?
 
-    Heckle.load_tests(files)
+    Heckle.load_tests(matches.flatten.uniq)
   end
 
   def build_hecklers
