@@ -41,6 +41,7 @@ class Heckle
     # ^C is held off until the child is tracked, and while it is stopped.
     Thread.handle_interrupt(Object => :never) do
       pid = fork_child(mutation)
+      own_group(pid)
       waiter = Process.detach(pid)
       begin
         finished = Thread.handle_interrupt(Object => :immediate) { waiter.join(@@timeout) }
@@ -61,6 +62,7 @@ class Heckle
     Process.fork do
       status = FORK_RAISED
       begin
+        own_group(0)
         Thread.handle_interrupt(Object => :immediate) do
           status = FORK_INSTALL_FAILED
           install mutation
@@ -82,22 +84,39 @@ class Heckle
     @reporter.warning "Installing the mutant raised an exception in the forked child. Not counted as a survivor."
   end
 
+  # TERM, then KILL if the child outlives the grace. Processes the child
+  # started are in its group and get the same signals, and whatever is
+  # left of the group once the child is gone is killed.
   def stop_child(pid, waiter)
     signal_child(:TERM, pid, waiter)
-    return if waiter.join(fork_grace)
-
-    signal_child(:KILL, pid, waiter)
-    waiter.join
+    unless waiter.join(fork_grace)
+      signal_child(:KILL, pid, waiter)
+      waiter.join
+    end
+    signal_group(:KILL, pid)
   end
 
   def fork_grace
     FORK_GRACE
   end
 
-  # Only while the waiter has not reaped the child, so the pid is still its.
+  # Both the parent and the child make the child a group leader, so the
+  # group exists before either goes on. It fails harmlessly once the
+  # child has done it or has exited.
+  def own_group(pid)
+    Process.setpgid(pid, 0)
+  rescue SystemCallError
+    nil
+  end
+
+  # Only while the waiter has not reaped the child, so the group is still its.
   def signal_child(signal, pid, waiter)
-    Process.kill(signal, pid) if waiter.alive?
-  rescue Errno::ESRCH
+    signal_group(signal, pid) if waiter.alive?
+  end
+
+  def signal_group(signal, pid)
+    Process.kill(signal, -pid)
+  rescue Errno::ESRCH, Errno::EPERM
     nil
   end
 
