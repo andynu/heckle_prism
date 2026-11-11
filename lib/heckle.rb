@@ -306,9 +306,11 @@ class Heckle
       @failures.each do |failure|
         @reporter.failure(dedent(original_source), dedent(failure))
       end
+      @reporter.mutant_totals(@failures.size, @count)
       false
     else
       @reporter.no_surviving_mutants
+      @reporter.mutant_totals(0, @count)
       true
     end
   end
@@ -407,6 +409,11 @@ class Heckle
 
     def no_surviving_mutants
       puts "No mutants survived. Cool!\n\n"
+    end
+
+    def mutant_totals(survived, total)
+      puts "#{survived} of #{total} mutants survived"
+      puts
     end
 
     def replacing(klass_name, method_name, original, src)

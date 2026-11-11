@@ -40,7 +40,7 @@ class TestHeckleRunner < Minitest::Test
     assert_equal "", err
     assert_includes out, "Initial tests pass. Let's rumble."
     assert_includes out, "***  Doubler#double loaded with 5 possible mutations"
-    assert_includes out, "No mutants survived."
+    assert_includes out, "No mutants survived. Cool!\n\n0 of 5 mutants survived\n\n"
     assert_equal 0, status.exitstatus
   end
 
@@ -52,6 +52,7 @@ class TestHeckleRunner < Minitest::Test
     assert_includes out, "--- original\n+++ mutation\n"
     assert_includes out, "\n def double x\n   if Numeric === x\n     x * 2\n   else\n-    \"NaN\"\n"
     refute_includes out, "No mutants survived."
+    assert_match(/^ end\n\n1 of 5 mutants survived\n\nHeckle Results:\n/, out)
     assert_equal 1, status.exitstatus
   end
 
@@ -65,6 +66,7 @@ class TestHeckleRunner < Minitest::Test
       Passed    :   1
       Failed    :   0
       Thick Skin:   0
+      Mutants   :   5 killed, 0 survived
 
       All heckling was thwarted! YAY!!!
     OUT
@@ -246,6 +248,22 @@ class TestHeckleRunner < Minitest::Test
     assert_includes out, "Passed    :   1\nFailed    :   1\n"
     assert_includes out, "-  x / 4\n"
     assert_equal 1, status.exitstatus
+  end
+
+  # halve is fully covered by test/units/halver_test.rb; quarter not at all.
+  def test_whole_class_totals_with_a_mix
+    out, _err, _status = heckle("Halver", "-t", "test/units/*_test.rb")
+
+    assert_equal ["0 of 2 mutants survived", "2 of 2 mutants survived"],
+                 out.scan(/^\d+ of \d+ mutants survived$/)
+    assert_includes out, "Thick Skin:   0\nMutants   :   2 killed, 2 survived\n\nImprove the tests"
+  end
+
+  def test_whole_class_totals_leave_out_thick_skins
+    out, _err, _status = heckle("Tally", *TALLY)
+
+    assert_equal 3, out.scan(/^\d+ of \d+ mutants survived$/).size
+    assert_match(/^Thick Skin:   1\nMutants   : +\d+ killed, 0 survived\n\n/, out)
   end
 
   def test_default_patterns_skip_files_outside_test

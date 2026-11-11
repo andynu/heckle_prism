@@ -31,7 +31,7 @@ class RecordingReporter
   end
 
   %i[no_mutations method_loaded remaining_mutations warning info no_failures
-     failure no_surviving_mutants replacing report_test_failures].each do |name|
+     failure no_surviving_mutants mutant_totals replacing report_test_failures].each do |name|
     define_method(name) { |*args| @calls << [name, *args] }
   end
 
@@ -264,6 +264,7 @@ class TestHeckle < Minitest::Test
       [:remaining_mutations, 1],
       [:report_test_failures],
       [:no_surviving_mutants],
+      [:mutant_totals, 0, 2],
     ], reporter.calls
     assert_empty heckler.failures
     assert_equal 2, heckler.count
@@ -276,8 +277,9 @@ class TestHeckle < Minitest::Test
 
     assert_equal false, heckler.validate
     assert_equal [survivor], heckler.failures
-    assert_equal [:no_failures, :failure], reporter.names.last(2)
-    assert_equal [:failure, "def pair\n  [1, 2]\nend", "def pair\n  [6, 2]\nend"], reporter.calls.last
+    assert_equal [:no_failures, :failure, :mutant_totals], reporter.names.last(3)
+    assert_equal [:failure, "def pair\n  [1, 2]\nend", "def pair\n  [6, 2]\nend"], reporter.calls[-2]
+    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
   end
 
   LETTER = [
@@ -312,7 +314,7 @@ class TestHeckle < Minitest::Test
 
     assert_equal false, heckler.validate
     assert_equal [LETTER % "unless"], heckler.failures
-    assert_equal [:failure, LETTER_SHOWN % "if", LETTER_SHOWN % "unless"], reporter.calls.last
+    assert_equal [:failure, LETTER_SHOWN % "if", LETTER_SHOWN % "unless"], reporter.calls[-2]
   end
 
   def test_debug_replacement_is_dedented
@@ -338,7 +340,7 @@ class TestHeckle < Minitest::Test
 
     assert_equal ["def guarded_answer\n    47\n  end"], heckler.failures
     assert_equal [:failure, "def guarded_answer\n  42\nend", "def guarded_answer\n  47\nend"],
-                 reporter.calls.last
+                 reporter.calls[-2]
   end
 
   def test_tests_run_against_installed_mutant
@@ -421,6 +423,35 @@ class TestHeckle < Minitest::Test
     assert_includes out, "The following mutations didn't cause test failures:\n"
     assert_includes out, "--- original\n+++ mutation\n"
     assert_includes out, "\n def pair\n-  [1, 2]\n+  [6, 2]\n end\n"
+    assert out.end_with?(" end\n\n1 of 2 mutants survived\n\n"), out
+  end
+
+  def test_real_reporter_totals_without_survivors
+    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { false }
+
+    out, _err = capture_io { heckler.validate }
+
+    assert out.end_with?("No mutants survived. Cool!\n\n0 of 2 mutants survived\n\n"), out
+  end
+
+  def test_thick_skin_has_no_totals_line
+    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, Heckle::Reporter.new) { flunk "no run expected" }
+
+    out, _err = capture_io { heckler.validate }
+
+    refute_includes out, "mutants survived"
+  end
+
+  def test_totals_count_a_timed_out_mutant_as_killed
+    reporter = RecordingReporter.new
+    heckler = scripted("HeckleSubjects", "pair", [:lit], reporter) do |h|
+      sleep 5 if h.count == 1
+      true
+    end
+
+    with_timeout(0.05) { heckler.validate }
+
+    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
   end
 
   def test_real_reporter_thick_skin_names_the_class

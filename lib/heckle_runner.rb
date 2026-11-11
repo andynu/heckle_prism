@@ -132,7 +132,12 @@ class HeckleRunner
     puts
 
     counts = Hash.new(0)
-    hecklers.each { |heckler| counts[heckler.validate] += 1 }
+    survived = killed = 0
+    hecklers.each do |heckler|
+      counts[heckler.validate] += 1
+      survived += heckler.failures.size
+      killed += heckler.count - heckler.failures.size
+    end
     all_good = counts[false] == 0
 
     puts "Heckle Results:"
@@ -140,6 +145,7 @@ class HeckleRunner
     puts "Passed    : %3d" % counts[true]
     puts "Failed    : %3d" % counts[false]
     puts "Thick Skin: %3d" % counts[nil]
+    puts "Mutants   : %3d killed, %d survived" % [killed, survived]
     puts
 
     if all_good then
