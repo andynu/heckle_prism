@@ -107,7 +107,21 @@ class Heckle
     # Minitest.autorun installs its at_exit hook only while this is false.
     Minitest.class_variable_set(:@@installed_at_exit, true)
     paths.each { |path| require File.expand_path(path) }
+    leave_coverage_alone
   end
+
+  ##
+  # A SimpleCov started by the tests would write its report at exit and
+  # replace the project's own with the coverage of a heckle run. Setting
+  # external_at_exit (simplecov 0.19 and later) makes its at_exit hook do
+  # nothing.
+
+  def self.leave_coverage_alone
+    return unless defined?(::SimpleCov) && ::SimpleCov.respond_to?(:external_at_exit=)
+
+    ::SimpleCov.external_at_exit = true
+  end
+  private_class_method :leave_coverage_alone
 
   ##
   # Creates a new Heckle that will heckle +klass_name+ and +method_name+,
