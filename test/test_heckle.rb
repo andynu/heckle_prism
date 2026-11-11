@@ -842,4 +842,294 @@ class TestHeckle < Minitest::Test
     ], mutants
     assert_equal "def uses_same_literal\n    i = 1\n    i = 1\n    i = 1\n  end", heckler.original_source
   end
+
+  # Fork mode. Scripts run in the forked child, so they report back through
+  # a pipe the child inherits. Every child is reaped, which leaves
+  # Process.waitpid with nothing to wait for.
+
+  # Records the pid of each forked child.
+  class ForkRecordingHeckler < ScriptedHeckler
+    def pids
+      @pids ||= []
+    end
+
+    private
+
+    def fork_child(mutation)
+      super.tap { |pid| pids << pid }
+    end
+  end
+
+  # The usual ^C pause is skipped.
+  class NoPauseHeckler < ForkRecordingHeckler
+    def sleep(*)
+    end
+  end
+
+  # install raises a SyntaxError for every mutant.
+  class BadInstallHeckler < ForkRecordingHeckler
+    private
+
+    def install_source(_mutation)
+      ["class HeckleSubjects; def pair\n  [1, 2]\nend end\nend\n", 12]
+    end
+  end
+
+  def with_fork(value = true)
+    saved = Heckle.fork?
+    Heckle.fork = value
+    yield
+  ensure
+    Heckle.fork = saved
+  end
+
+  def forked(klass_name, method_name, nodes, reporter = RecordingReporter.new,
+             heckler_class: ForkRecordingHeckler, &script)
+    heckler = heckler_class.new(klass_name, method_name, nodes, reporter)
+    heckler.script = script
+    (@hecklers ||= []) << heckler
+    heckler
+  end
+
+  def assert_reaped(pids)
+    refute_empty pids
+    pids.each do |pid|
+      assert_raises(Errno::ECHILD, "child #{pid} not reaped") { Process.waitpid(pid, Process::WNOHANG) }
+    end
+  end
+
+  # What the child wrote into the pipe, once every child has exited.
+  def drain(reader, writer)
+    writer.close
+    reader.read
+  ensure
+    reader.close
+  end
+
+  def test_fork_setting_is_off_by_default
+    assert_equal false, Heckle.fork?
+  end
+
+  def test_fork_reports_like_in_process
+    script = ->(h) { h.count == 1 }
+    in_process_reporter = RecordingReporter.new
+    in_process = scripted("HeckleSubjects", "pair", [:lit], in_process_reporter, &script)
+    in_process_result = in_process.validate
+
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter, &script)
+    result = with_fork { heckler.validate }
+
+    assert_equal false, result
+    assert_equal in_process_result, result
+    assert_equal in_process_reporter.calls, reporter.calls
+    assert_equal ["def pair\n    [6, 2]\n  end"], heckler.failures
+    assert_equal 2, heckler.count
+    assert_reaped heckler.pids
+  end
+
+  def test_fork_all_killed_like_in_process
+    in_process_reporter = RecordingReporter.new
+    scripted("HeckleSubjects", "pair", [:lit], in_process_reporter) { false }.validate
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter) { false }
+
+    assert_equal true, with_fork { heckler.validate }
+    assert_equal in_process_reporter.calls, reporter.calls
+  end
+
+  def test_fork_thick_skin_forks_nothing
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk }
+
+    assert_nil with_fork { heckler.validate }
+    assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
+    assert_empty heckler.pids
+  end
+
+  def test_fork_child_runs_the_mutant_and_the_parent_never_does
+    original = HeckleSubjects.instance_method(:pair)
+    reader, writer = IO.pipe
+    heckler = forked("HeckleSubjects", "pair", [:lit]) do
+      writer.puts HeckleSubjects.new.pair.inspect
+      false
+    end
+
+    with_fork { heckler.validate }
+
+    assert_equal "[6, 2]\n[1, 7]\n", drain(reader, writer)
+    assert_equal original, HeckleSubjects.instance_method(:pair)
+    assert_equal [1, 2], HeckleSubjects.new.pair
+    assert_reaped heckler.pids
+  end
+
+  def test_fork_child_skips_at_exit_handlers
+    reader, writer = IO.pipe
+    heckler = forked("HeckleSubjects", "answer", [:lit]) do
+      at_exit { writer.puts "at_exit ran" }
+      writer.puts "judged"
+      true
+    end
+
+    with_fork { heckler.validate }
+
+    assert_equal "judged\n", drain(reader, writer)
+  end
+
+  def test_fork_install_syntax_error_is_reported_as_in_process
+    in_process_reporter = RecordingReporter.new
+    in_process = BadInstallHeckler.new("HeckleSubjects", "pair", [:lit], in_process_reporter)
+    in_process.script = ->(_h) { flunk "no test run expected" }
+    (@hecklers ||= []) << in_process
+    in_process.validate
+
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter, heckler_class: BadInstallHeckler) { true }
+
+    assert_equal true, with_fork { heckler.validate }
+    assert_equal in_process_reporter.calls, reporter.calls
+    warning = reporter.calls.find { |call| call.first == :warning }
+    assert_match(/\AMutation caused a syntax error:\n\n.*heckle_subjects\.rb:\d+: syntax error/, warning[1])
+    assert_empty heckler.failures
+    assert_reaped heckler.pids
+  end
+
+  def test_fork_tests_raising_is_not_a_survivor
+    original = HeckleSubjects.instance_method(:answer)
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "answer", [:lit], reporter) { raise "test runner broke" }
+
+    assert_equal true, with_fork { heckler.validate }
+    assert_includes reporter.calls, [:warning, "The tests raised an exception in the forked child. Not counted as a survivor."]
+    assert_equal [:mutant_totals, 0, 1], reporter.calls.last
+    assert_equal original, HeckleSubjects.instance_method(:answer)
+    assert_reaped heckler.pids
+  end
+
+  def test_fork_unexpected_exit_status_is_not_a_survivor
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "answer", [:lit], reporter) { exit!(0) }
+
+    assert_equal true, with_fork { heckler.validate }
+    assert_includes reporter.calls,
+                    [:warning, "The forked test run ended with exit status 0. Not counted as a survivor."]
+    assert_empty heckler.failures
+  end
+
+  def test_fork_child_crash_is_not_a_survivor
+    original = HeckleSubjects.instance_method(:pair)
+    reader, writer = IO.pipe
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter) do |h|
+      writer.puts HeckleSubjects.new.pair.inspect
+      Process.kill(:KILL, Process.pid) if h.count == 1
+      true
+    end
+
+    assert_equal false, with_fork { heckler.validate }
+
+    assert_equal "[6, 2]\n[1, 7]\n", drain(reader, writer)
+    assert_includes reporter.calls,
+                    [:warning, "The forked test run was killed by signal KILL. Not counted as a survivor."]
+    assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
+    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
+    assert_equal original, HeckleSubjects.instance_method(:pair)
+    assert_equal [1, 2], HeckleSubjects.new.pair
+    assert_reaped heckler.pids
+  end
+
+  # The first child never finishes; the deadline ends it.
+  def test_fork_timeout_kills_the_child
+    original = HeckleSubjects.instance_method(:pair)
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter) do |h|
+      sleep if h.count == 1
+      true
+    end
+
+    result = with_timeout(0.5) { with_fork { heckler.validate } }
+
+    assert_equal false, result
+    assert_includes reporter.calls,
+                    [:warning, "Your tests timed out. Heckle may have caused an infinite loop."]
+    assert_equal ["def pair\n    [1, 7]\n  end"], heckler.failures
+    assert_equal [:mutant_totals, 1, 2], reporter.calls.last
+    assert_equal original, HeckleSubjects.instance_method(:pair)
+    assert_reaped heckler.pids
+  end
+
+  # Signals the child only once it reports it has trapped TERM, and
+  # records the signals sent.
+  class TermIgnoredHeckler < ForkRecordingHeckler
+    attr_accessor :ready
+    attr_reader :signals
+
+    private
+
+    def fork_grace
+      0.1
+    end
+
+    def stop_child(pid, waiter)
+      ready.gets
+      super
+    end
+
+    def signal_child(signal, pid, waiter)
+      (@signals ||= []) << signal
+      super
+    end
+  end
+
+  def test_fork_timeout_kills_a_child_that_ignores_term
+    reader, writer = IO.pipe
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "answer", [:lit], reporter, heckler_class: TermIgnoredHeckler) do
+      trap("TERM") {}
+      writer.puts "trapped"
+      sleep
+    end
+    heckler.ready = reader
+
+    with_timeout(0.2) { with_fork { heckler.validate } }
+
+    assert_equal %i[TERM KILL], heckler.signals
+    assert_includes reporter.calls,
+                    [:warning, "Your tests timed out. Heckle may have caused an infinite loop."]
+    assert_reaped heckler.pids
+  ensure
+    reader&.close
+    writer&.close
+  end
+
+  # ^C in the parent while the child is running its tests.
+  def test_fork_interrupt_kills_the_child
+    original = HeckleSubjects.instance_method(:pair)
+    reader, writer = IO.pipe
+    reporter = RecordingReporter.new
+    heckler = forked("HeckleSubjects", "pair", [:lit], reporter, heckler_class: NoPauseHeckler) do |h|
+      if h.count == 1
+        writer.puts "running"
+        sleep
+      end
+      false
+    end
+    main = Thread.current
+    interrupter = Thread.new do
+      reader.gets
+      main.raise(Interrupt)
+    end
+
+    result = with_fork { heckler.validate }
+    interrupter.join
+
+    assert_equal true, result
+    assert_includes reporter.calls, [:warning, "Mutation canceled, hit ^C again to exit"]
+    assert_equal [:mutant_totals, 0, 2], reporter.calls.last
+    assert_equal original, HeckleSubjects.instance_method(:pair)
+    assert_reaped heckler.pids
+  ensure
+    reader&.close
+    writer&.close
+  end
 end
