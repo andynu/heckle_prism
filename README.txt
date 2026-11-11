@@ -98,24 +98,87 @@ file:
     % heckle Doubler double -b -t test/test_doubler_with_a_number.rb
 
 Each mutant the tests did not catch is printed as a diff against the
-original method. The exit status is 0 when every mutant was caught and 1
+original method. The exit status is 0 when no mutant survived and 1
 otherwise, or 2 when heckle had to end the process itself (see TIMEOUTS
 AND MEMORY).
 
+Each mutant ends one of three ways. It is killed when the tests failed
+against it, and it survived when they passed. Otherwise it was not
+judged: its test run timed out, went over the memory limit or crashed
+in fork mode, the mutant could not be installed or had a syntax error,
+or the run was stopped with ^C. A mutant that was not judged gets a warning, followed by the
+same diff a survivor gets, so the warning says which mutant it was:
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!! Your tests timed out. Heckle may have caused an infinite loop.
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    --- original
+    +++ mutation
+     def tally
+       @notes << :tallied
+       rows = 0
+    -  (1..@entries.size).each { rows += 1 }
+    +  (1..nil).each { rows += 1 }
+       rows
+     end
+
+The lines marked - are the original code and the lines marked + are
+what the mutant ran in their place. Here @entries.size was replaced by
+nil, which made the range endless.
+
+A timeout is weaker evidence than a failed test: the mutant made the
+run slow or endless, and the tests did not necessarily notice it. So
+heckle counts timed out mutants apart from killed ones, and like every
+mutant that was not judged they are not survivors and do not change
+the exit status.
+
 After each method, a line such as "2 of 9 mutants survived" gives the
 number of its mutants the tests did not catch and the number heckle ran.
+When some of the method's mutants were not judged, a second line says
+how many and why:
+
+    1 of 2 mutants survived
+    1 timed out
+
+The reasons are "timed out", "ran out of memory" (fork mode, over the
+memory limit or out of memory in the child), "crashed" (fork mode: the
+test run raised, the child died by a signal or exited with an
+unexpected status), "failed to install" (fork mode), "had a syntax
+error" and "canceled" (^C). Several are listed in that order, separated
+by commas, as in "2 timed out, 1 crashed".
+
 A method with nothing to mutate gets the thick skin warning and no such
-line. The Heckle Results block at the end counts methods (Passed, Failed
-and Thick Skin) and then mutants:
+lines. The Heckle Results block at the end counts methods (Passed,
+Failed and Thick Skin) and then mutants:
 
     Mutants   :  31 killed, 4 survived
 
-A mutant counts as killed when it was run and did not survive: the tests
-failed or raised, timed out, went over the memory limit in fork mode, or
-the mutant raised a SyntaxError when installed. Killed plus survived is the number of mutants run across all
+When some mutants were not judged, their counts by reason come between
+killed and survived:
+
+    Mutants   : 389 killed, 2 timed out, 81 survived
+    Mutants   : 389 killed, 1 timed out, 1 crashed, 81 survived
+
+The figures on the line add up to the number of mutants run across all
 the methods heckled. Passed and Failed count methods, so one method with
 many survivors shows as one failure there and as many in the mutant
-line.
+line. A method whose mutants were all killed or not judged counts as
+Passed.
+
+Heckle.new takes a reporter as its fourth argument, Heckle::Reporter by
+default. A reporter that subclasses Heckle::Reporter can override any
+of its methods. One that does not must define every method validate
+calls: no_mutations, method_loaded, remaining_mutations, replacing,
+report_test_failures, no_failures, failure, no_surviving_mutants,
+mutant_totals and not_judged. Two of these differ from heckle 3.0.0.
+not_judged(reason, message, original, mutant) is new: it gets each
+mutant that was not judged, with its reason (a key of
+Heckle::NOT_JUDGED), the warning text and the dedented original and
+mutant sources, and it replaces the warning calls validate made for
+those mutants. mutant_totals gets a third argument, a hash of counts by
+reason, when some of the method's mutants were not judged, and the same
+two arguments as before otherwise.
 
 == USING HECKLE IN A PROJECT:
 
@@ -214,8 +277,8 @@ firmly it can hold those limits depends on the mode.
 
 The timeout. Each test run gets -T seconds, or without -T twice the time
 of the unmutated run, at least 5 seconds. When it runs over, heckle
-raises Heckle::Timeout in it, prints the timeout warning, counts the
-mutant as killed and goes on. Heckle::Timeout is an Exception, not a
+raises Heckle::Timeout in it, prints the timeout warning and the
+mutant's diff, counts the mutant as timed out and goes on. Heckle::Timeout is an Exception, not a
 StandardError, so neither a bare rescue nor "rescue StandardError" in
 the code under test catches it, and Minitest lets it through.
 
@@ -312,10 +375,12 @@ over, heckle sends the group TERM, then KILL a second later if the
 child is still running, then KILL to whatever is left of the group, and
 prints the usual timeout warning. ^C stops the child's group the same
 way. A child that goes over the memory limit is sent KILL at once, with
-its group, and a child that runs out of memory gets a warning; neither
-is counted as a survivor. A child that ends any other way (an exception out of the test
-run, an unexpected exit status, a signal) gets a warning, and its
-mutant is counted as killed, never as survived. Fork mode needs
+its group, and a child that runs out of memory gets a warning; both
+are counted as "ran out of memory", never as survivors. A child that
+ends any other way (an exception out of the test run, an unexpected
+exit status, a signal) gets a warning, and its mutant is counted as
+"crashed", never as survived. Each of these warnings is followed by
+the mutant's diff. Fork mode needs
 Process.fork; on a Ruby without it, such as Ruby on Windows, heckle
 stops with a one-line message.
 
