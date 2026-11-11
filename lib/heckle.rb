@@ -181,11 +181,12 @@ class Heckle
 
   def install(mutation)
     remove_live_method
+    # Set before the eval, so restore puts the original back if it raises.
+    @installed = true
     prelude = magic_comments
     eval(prelude + wrapped(mutant_source(mutation)), TOPLEVEL_BINDING, @file,
          def_node.location.start_line - prelude.count("\n"))
     @owner.send(@visibility, @name)
-    @installed = true
   end
 
   ##

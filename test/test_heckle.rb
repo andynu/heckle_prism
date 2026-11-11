@@ -220,6 +220,21 @@ class TestHeckle < Minitest::Test
     $VERBOSE = verbose
   end
 
+  class UnparsableInstallHeckler < TestHeckler
+    def mutant_source(_mutation)
+      "def answer\n  47\nend end"
+    end
+  end
+
+  def test_restore_after_install_raised
+    heckler = UnparsableInstallHeckler.new("HeckleSubjects", "answer", [:lit])
+    (@hecklers ||= []) << heckler
+
+    assert_raises(SyntaxError) { heckler.install(nil) }
+    heckler.restore
+    assert_equal 42, HeckleSubjects.new.answer
+  end
+
   def test_class_with_superclass_is_reopened
     heckler = install_only("HeckleSubjectsChild", "own_answer", [:lit])
 
