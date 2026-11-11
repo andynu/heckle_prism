@@ -2,6 +2,7 @@ require "prism"
 require "timeout"
 require "tempfile"
 require "minitest"
+require "heckle/version"
 require "heckle/method_finder"
 require "heckle/mutation"
 require "heckle/mutator"
@@ -21,11 +22,6 @@ class Heckle
   # Raised when the method to heckle, or its source, cannot be found.
 
   class SourceNotFound < StandardError; end
-
-  ##
-  # The version of Heckle you are using.
-
-  VERSION = '2.0.0.b1'
 
   ##
   # All mutation kinds Heckle knows. The names are the legacy node names.

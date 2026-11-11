@@ -1,3 +1,10 @@
+PATH
+  remote: .
+  specs:
+    heckle (2.0.0.b1)
+      minitest (>= 5.27.0)
+      prism (>= 1.5.1)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -14,9 +21,8 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  minitest (~> 6.1)
-  prism (~> 2.1)
+  heckle!
   rake
 
 BUNDLED WITH
-   4.0.20
+  4.0.20
