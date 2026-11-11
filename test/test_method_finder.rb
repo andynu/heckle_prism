@@ -195,6 +195,23 @@ class TestMethodFinder < Minitest::Test
     assert_nil find_in(source, "A", "foo")
   end
 
+  # `def self.foo` inside `class << self` defines a method on the singleton
+  # class's own singleton, not A.foo.
+  def test_self_def_inside_singleton_class_block_is_not_a_class_method
+    source = <<~RUBY
+      class A
+        class << self
+          def self.foo
+            :meta
+          end
+        end
+      end
+    RUBY
+
+    assert_nil find_in(source, "A", "self.foo")
+    assert_nil find_in(source, "A", "foo")
+  end
+
   def test_def_passed_to_a_call
     source = <<~RUBY
       class A
