@@ -1,6 +1,7 @@
 require "minitest/autorun"
 require "open3"
 require "rbconfig"
+require "bounded_process"
 
 # Heckle#tests_pass? runs Minitest in-process, so it is exercised in a
 # subprocess against the fixture project rather than inside this suite.
@@ -128,6 +129,78 @@ class TestTestsPass < Minitest::Test
         p e.class
       end
       abort "slow" if Process.clock_gettime(Process::CLOCK_MONOTONIC) - started > 2
+    RUBY
+  end
+
+  # Runs +script+ after PRELUDE with Minitest's parallel executor at four
+  # workers, under a backstop, since it provokes runaway tests.
+  def drive_bounded(script)
+    command = [{ "MT_CPU" => "4" }, RbConfig.ruby, "-I", LIB, "-I", "lib", "-e", PRELUDE + script]
+    BoundedProcess.capture3(*command, chdir: PROJECT, seconds: 30)
+  end
+
+  # A run that times out, then one that passes, each under a watchdog.
+  ESCAPE_THEN_PASS = <<~'RUBY'.freeze
+    def now
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    def watched(seconds)
+      Heckle::Watchdog.new(seconds, "swallowed\n").watch { Heckle.tests_pass? }
+    rescue Heckle::Timeout
+      :timeout
+    end
+
+    threads = Thread.list.size
+    $spin = true
+    p watched(0.3)
+    started = now
+    Heckle.settle
+    puts(now - started < 2 ? "settled" : "settled slowly")
+    $spin = false
+    p watched(5)
+    p Thread.list.size == threads
+  RUBY
+
+  # The stopped run leaves the executor's workers waiting on its queue,
+  # where they would take the signals that end the next run's workers.
+  def test_settle_after_an_escaped_timeout_frees_the_next_run
+    run = drive_bounded(<<~'RUBY' + ESCAPE_THEN_PASS)
+      class SpinTest < Minitest::Test
+        def test_spin
+          loop {} if $spin
+        end
+      end
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal ["", ":timeout\nsettled\ntrue\ntrue\nruns=2\n"], [run.err, run.out]
+  end
+
+  # A parallel test still spinning in a worker when the run is stopped is
+  # killed, so it cannot run on beside the next run.
+  def test_settle_stops_a_worker_stuck_in_a_parallel_test
+    run = drive_bounded(<<~'RUBY' + ESCAPE_THEN_PASS)
+      class ParallelSpinTest < Minitest::Test
+        parallelize_me!
+
+        def test_spin
+          loop {} if $spin
+        end
+      end
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal ["", ":timeout\nsettled\ntrue\ntrue\nruns=2\n"], [run.err, run.out]
+  end
+
+  def test_settle_without_a_stopped_run_does_nothing
+    assert_drive "true\nnil\ntrue\nruns=3\n", <<~RUBY
+      Heckle.load_tests(Dir.glob("test/test_*.rb"))
+      executor = Minitest.parallel_executor
+      p Heckle.new("Doubler", "double").tests_pass?
+      p Heckle.settle
+      p Minitest.parallel_executor.equal?(executor)
     RUBY
   end
 end

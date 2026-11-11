@@ -8,6 +8,7 @@ require "heckle/mutator"
 require "heckle/forking"
 require "heckle/memory"
 require "heckle/watchdog"
+require "heckle/settling"
 
 ##
 # Test Unit Sadism
@@ -278,11 +279,17 @@ class Heckle
       end
 
       # The same sequence as Minitest.run, without argument parsing or plugins.
+      settle
       executor = Minitest.parallel_executor
       executor.start if executor.respond_to?(:start)
-      reporter.start
-      run_all_suites(reporter, options)
-      executor.shutdown if executor.respond_to?(:shutdown)
+      begin
+        reporter.start
+        run_all_suites(reporter, options)
+        executor.shutdown if executor.respond_to?(:shutdown)
+      rescue Exception
+        abandon(executor)
+        raise
+      end
       reporter.report
 
       reporter.passed?
@@ -358,6 +365,7 @@ class Heckle
         sleep 2
       ensure
         restore
+        self.class.settle
       end
     end
 

@@ -349,6 +349,50 @@ class TestHeckleRunner < Minitest::Test
                  HeckleRunner.mutants_line(1200, { canceled: 1, timeout: 2, crash: 1 }, 3)
   end
 
+  RELAY_SURVIVOR = "The following mutations didn't cause test failures:\n\n" \
+                   "--- original\n+++ mutation\n def pass_on\n   rows = 0\n" \
+                   "   (1..@entries.size).each { rows += 1 }\n-  @notes << rows\n+  nil\n" \
+                   "   @entries.first\n end\n\n1 of 3 mutants survived\n1 timed out\n\n".freeze
+
+  # Relay#pass_on's first mutant loops forever. The two after it, a
+  # survivor and a kill, must get the outcomes they get on their own.
+  def assert_judged_after_a_timeout(run, label)
+    refute run.killed, "heckle did not finish #{label}; stdout:\n#{run.out}"
+    assert_equal "", run.err, label
+    assert_equal 1, run.out.scan(TIMEOUT_WARNING).size, label
+    assert_includes run.out, RELAY_SURVIVOR, label
+    assert_includes run.out, "Mutants   :   1 killed, 1 timed out, 1 survived\n", label
+    assert_equal 1, run.status.exitstatus, label
+  end
+
+  def test_mutants_after_a_timeout_are_judged_on_their_own
+    [[], ["--fork"]].each do |mode|
+      run = bounded_heckle("Relay", "pass_on", "-n", "call", "-T", "1", "-t", "runaway/relay_test.rb", *mode)
+
+      assert_judged_after_a_timeout(run, mode.inspect)
+    end
+  end
+
+  # The test rescues the timeout once and returns, failing.
+  def test_mutants_after_a_swallowed_timeout_are_judged_on_their_own
+    run = bounded_heckle("Relay", "pass_on", "-n", "call", "-T", "1", "-t", "runaway/stubborn_relay_test.rb")
+
+    assert_judged_after_a_timeout(run, "stubborn")
+  end
+
+  # In fork mode a mutant over the memory limit is killed and the run goes
+  # on; gather's later mutants are four survivors and a kill.
+  def test_mutants_after_a_memory_kill_are_judged_on_their_own
+    run = bounded_heckle("Relay", "gather", "-n", "call", "--memory-limit", "150", "--fork",
+                         "-t", "runaway/relay_test.rb")
+
+    refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
+    assert_equal "", run.err
+    assert_includes run.out, "4 of 6 mutants survived\n1 ran out of memory\n\n"
+    assert_includes run.out, "Mutants   :   1 killed, 1 ran out of memory, 4 survived\n"
+    assert_equal 1, run.status.exitstatus
+  end
+
   HOARDER = %w[Hoarder load -n call -t runaway/hoarder_test.rb].freeze
 
   def memory_limit_line(out)
