@@ -361,8 +361,8 @@ class Heckle
       end
     end
 
-    # The not judged counts only when there are some, so a reporter
-    # written for 3.0.0 sees the same calls as then.
+    # The not judged counts only when there are some, so a reporter whose
+    # mutant_totals takes two arguments works while every mutant is judged.
     totals = [@failures.size, @count]
     totals << not_judged unless not_judged.empty?
 
