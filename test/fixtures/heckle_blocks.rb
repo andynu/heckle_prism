@@ -57,3 +57,9 @@ module HeckleBlocks
     end
   end
 end
+
+HeckleBlocks::Tagged = Struct.new(:tag) do
+  def label
+    42
+  end
+end

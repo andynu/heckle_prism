@@ -40,6 +40,11 @@ class HeckleSubjects
     42
   end
 
+  # Public, though Kernel#format is private.
+  def format
+    42
+  end
+
   private
 
   def hidden_answer
@@ -51,6 +56,33 @@ class HeckleSubjectsChild < HeckleSubjects
   def own_answer
     42
   end
+
+  def answer
+    43
+  end
+
+  # Public, though the parent's is protected.
+  def guarded_answer
+    44
+  end
+end
+
+# The second answer is never defined: the raise ends the class body.
+class HeckleSubjectsHalfLoaded
+  def answer
+    42
+  end
+  raise "stop here"
+
+  def answer
+    0
+  end
+rescue RuntimeError
+  nil
+end
+
+class HeckleSubjectsEvaled
+  class_eval("def gone\n  1\nend", "/nonexistent/heckle_gone.rb", 1)
 end
 
 module HeckleNesting
