@@ -16,7 +16,7 @@ class TestGemspec < Minitest::Test
 
   # 3, so this fork's releases are not confused with the original's 2.x.
   def test_version
-    assert_equal "3.0.0", Heckle::VERSION
+    assert_equal "3.0.1", Heckle::VERSION
   end
 
   def test_packages_only_the_library_and_executable
