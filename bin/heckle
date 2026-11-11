@@ -14,4 +14,11 @@ require 'heckle_runner'
 # aborts) when both streams go to one file or pipe.
 $stdout.sync = true
 
-exit HeckleRunner.run
+begin
+  exit HeckleRunner.run
+rescue Errno::EPIPE
+  # The reader of stdout went away (heckle ... | head). Any installed
+  # mutant was restored on the way out. Under bundle exec an escaping
+  # EPIPE would become exit status 0.
+  exit 1
+end

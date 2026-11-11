@@ -26,6 +26,28 @@ class TestConsumerProject < Minitest::Test
     assert_equal 0, status.exitstatus
   end
 
+  # heckle ... | head: the reader closes stdout mid-run, here while a mutant
+  # is installed. Bundler's command dispatcher turns an Errno::EPIPE
+  # escaping into it into exit status 0.
+  def test_closed_stdout_ends_non_zero_with_methods_restored
+    env = { "BUNDLE_GEMFILE" => File.join(PROJECT, "Gemfile") }
+    args = [RbConfig.ruby, Gem.bin_path("bundler", "bundle"), "exec", "heckle", "Thermometer",
+            "-v", "-t", "pipe/thermometer_pipe_test.rb"]
+    run = lambda do
+      Open3.popen3(env, *args, chdir: PROJECT) do |stdin, stdout, stderr, thread|
+        stdin.close
+        stdout.each_line.find { |line| line == "mutant installed\n" }
+        stdout.close
+        [stderr.read, thread.value]
+      end
+    end
+    err, status = defined?(Bundler) ? Bundler.with_unbundled_env(&run) : run.()
+
+    refute status.success?, "exit status #{status.inspect}"
+    assert_equal 1, status.exitstatus
+    assert_equal ["at exit: [212, 32]"], err.lines.map(&:chomp)
+  end
+
   def test_uses_the_heckle_in_this_repository
     out, err, status = bundle_exec("ruby", "-e", 'require "heckle"; puts $LOADED_FEATURES.grep(/heckle\.rb\z/)')
 
