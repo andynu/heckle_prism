@@ -2,6 +2,7 @@ require "minitest/autorun"
 require "open3"
 require "rbconfig"
 require "bounded_process"
+require "heckle/watchdog"
 
 # Heckle#tests_pass? runs Minitest in-process, so it is exercised in a
 # subprocess against the fixture project rather than inside this suite.
@@ -192,6 +193,85 @@ class TestTestsPass < Minitest::Test
 
     refute run.killed, run.out
     assert_equal ["", ":timeout\nsettled\ntrue\ntrue\nruns=2\n"], [run.err, run.out]
+  end
+
+  # Minitest skips the teardown hooks of a test an exception passes
+  # through. settle runs them, quietly, as Minitest runs them after a
+  # failure: each in turn, errors captured, against the restored code.
+  def test_settle_runs_the_teardown_a_stopped_test_skipped
+    run = drive_bounded(<<~'RUBY')
+      $events = []
+      Minitest::Test.prepend(Module.new do
+        def after_teardown
+          $events << :after_teardown
+          super
+        end
+      end)
+      class SpinTest < Minitest::Test
+        def setup
+          $events << :setup
+        end
+
+        def teardown
+          puts "teardown output"
+          $events << :teardown
+          raise "teardown broke"
+        end
+
+        def test_spin
+          loop {}
+        end
+      end
+      begin
+        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
+      rescue Heckle::Timeout
+        p $events
+      end
+      Heckle.settle
+      p $events
+      Heckle.settle
+      p $events
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal ["", "[:setup]\n[:setup, :teardown, :after_teardown]\n" \
+                      "[:setup, :teardown, :after_teardown]\nruns=1\n"], [run.err, run.out]
+  end
+
+  # A teardown that swallows the timeout heckle raises in it ends the
+  # process, as a test run that does so does.
+  def test_settle_ends_the_process_when_the_teardown_swallows_its_timeout
+    run = drive_bounded(<<~'RUBY')
+      class StuckTeardownTest < Minitest::Test
+        def teardown
+          begin
+            sleep
+          rescue Exception
+            retry
+          end
+        end
+
+        def test_spin
+          loop {}
+        end
+      end
+      $stdout.sync = true
+      Heckle.timeout = 1
+      begin
+        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
+      rescue Heckle::Timeout
+        puts "stopped"
+      end
+      Heckle.settle
+      puts "not reached"
+    RUBY
+
+    refute run.killed, run.out
+    assert_equal "stopped\n", run.out
+    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert run.err.start_with?("heckle: the teardown of StuckTeardownTest#test_spin, which heckle ran after " \
+                               "its test was stopped,\nwas still running 2 seconds after the 1 second timeout"), run.err
+    assert_includes run.err, "--fork"
   end
 
   def test_settle_without_a_stopped_run_does_nothing

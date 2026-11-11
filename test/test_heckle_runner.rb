@@ -380,6 +380,14 @@ class TestHeckleRunner < Minitest::Test
     assert_judged_after_a_timeout(run, "stubborn")
   end
 
+  # The test's setup fails while the state its teardown resets is still
+  # set, as a database transaction left open would make later tests fail.
+  def test_mutants_after_a_timeout_get_the_teardown_their_test_skipped
+    run = bounded_heckle("Relay", "pass_on", "-n", "call", "-T", "1", "-t", "runaway/teardown_relay_test.rb")
+
+    assert_judged_after_a_timeout(run, "teardown")
+  end
+
   # In fork mode a mutant over the memory limit is killed and the run goes
   # on; gather's later mutants are four survivors and a kill.
   def test_mutants_after_a_memory_kill_are_judged_on_their_own
