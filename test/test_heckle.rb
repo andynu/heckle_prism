@@ -988,15 +988,17 @@ class TestHeckle < Minitest::Test
     end
   end
 
-  # Bounds reached in 1000 draws with probability above 1 - 1e-90.
-  def test_rand_range_and_symbol_cover_their_spans
+  # Bounds reached in 1000 draws with probability above 1 - 1e-30.
+  def test_rand_number_range_and_symbol_cover_their_spans
     heckler = Heckle.new("HeckleDummy", "uses_literal")
+    numbers = Array.new(1000) { heckler.rand_number }
     ranges = Array.new(1000) { heckler.rand_range }
     symbols = Array.new(1000) { heckler.rand_symbol.to_s }
 
-    assert_includes 40..49, ranges.map(&:begin).max
-    assert_includes 40..49, ranges.map { |range| range.end - range.begin }.max
-    assert_includes 41..50, symbols.map(&:size).max
+    assert_includes 94..100, numbers.map(&:abs).max
+    assert_includes 46..49, ranges.map(&:begin).max
+    assert_includes 46..49, ranges.map { |range| range.end - range.begin }.max
+    assert_includes 47..50, symbols.map(&:size).max
     assert_equal [*"a".."z", *"A".."Z"].sort, symbols.join.chars.uniq.sort
   end
 
