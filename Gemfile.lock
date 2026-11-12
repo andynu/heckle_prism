@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    heckle (3.0.1)
+    heckle (4.0.0)
       minitest (>= 6.1.0)
       prism (>= 2.0.0)
 
