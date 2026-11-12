@@ -435,8 +435,8 @@ Heckling heckle. In the child, the code that decides whether the tests
 passed runs after the mutant is loaded. So when heckle heckles its own
 methods, a mutant of a method on that path judges itself, and its
 result says nothing. Those methods are Heckle#tests_pass?,
-Heckle.tests_pass?, Heckle.quietly and Heckle.run_all_suites, and any
-tests_pass? a subclass defines. Their mutants still run; treat what
+Heckle.tests_pass? and Heckle.quietly, and any tests_pass? a subclass
+defines. Their mutants still run; treat what
 heckle reports for them as unknown. The other methods are judged by
 unmutated code: install is already running when its mutant replaces
 it, and the outcome is read in the parent.

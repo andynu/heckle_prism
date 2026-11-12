@@ -285,7 +285,7 @@ class Heckle
       executor.start if executor.respond_to?(:start)
       begin
         reporter.start
-        run_all_suites(reporter, options)
+        Minitest.run_all_suites(reporter, options)
         executor.shutdown if executor.respond_to?(:shutdown)
       rescue Exception
         abandon(executor)
@@ -296,16 +296,6 @@ class Heckle
       reporter.passed?
     end
   end
-
-  # Minitest 6 renamed Minitest.__run to Minitest.run_all_suites.
-  def self.run_all_suites(reporter, options)
-    if Minitest.respond_to?(:run_all_suites)
-      Minitest.run_all_suites(reporter, options)
-    else
-      Minitest.__run(reporter, options)
-    end
-  end
-  private_class_method :run_all_suites
 
   def self.quietly
     return yield if @@debug
