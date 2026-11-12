@@ -98,9 +98,9 @@ file:
     % heckle Doubler double -b -t test/test_doubler_with_a_number.rb
 
 Each mutant the tests did not catch is printed as a diff against the
-original method. The exit status is 0 when no mutant survived and 1
-otherwise, or 2 when heckle had to end the process itself (see TIMEOUTS
-AND MEMORY).
+original method. The exit status is 0 when no mutant survived and every
+mutant was run, 1 otherwise, or 2 when heckle had to end the process
+itself (see TIMEOUTS AND MEMORY).
 
 Each mutant ends one of three ways. It is killed when the tests failed
 against it, and it survived when they passed. Otherwise it was not
@@ -129,9 +129,9 @@ nil, which made the range endless.
 
 A timeout is weaker evidence than a failed test: the mutant made the
 run slow or endless, and the tests did not necessarily notice it. So
-heckle counts timed out mutants apart from killed ones, and like every
-mutant that was not judged they are not survivors and do not change
-the exit status.
+heckle counts timed out mutants apart from killed ones. They are not
+survivors and do not change the exit status, and neither do the other
+mutants that were not judged, except those that were not run.
 
 After each method, a line such as "2 of 9 mutants survived" gives the
 number of its mutants the tests did not catch and the number heckle ran.
@@ -166,7 +166,13 @@ The figures on the line add up to the number of mutants run across all
 the methods heckled. Passed and Failed count methods, so one method with
 many survivors shows as one failure there and as many in the mutant
 line. A method whose mutants were all killed or not judged counts as
-Passed.
+Passed, unless some were not run: with no survivor it then counts on a
+Not Run line, which appears only when it is not zero, and with a
+survivor under Failed. A run with mutants not run does not print "No
+mutants survived. Cool!" for their method or "All heckling was
+thwarted!" at the end, but a line such as
+
+    2 mutants were not run. Run heckle with --fork to judge them.
 
 Heckle.new takes a reporter as its fourth argument, Heckle::Reporter by
 default. A reporter that subclasses Heckle::Reporter can override any
@@ -213,10 +219,10 @@ remote test database stays bound by those round trips however few
 mutants the method has, which is another reason to narrow the run with
 -t.
 
-The exit status is 0 when no mutant survived, which includes a class or
-method with nothing to mutate. It is 1 when at least one mutant
-survived, and also on a usage error or when the unmutated tests fail
-without -F. It is 2 when heckle ended the process because a mutant could
+The exit status is 0 when no mutant survived and every mutant was run,
+which includes a class or method with nothing to mutate. It is 1 when
+at least one mutant survived or was not run, and also on a usage error
+or when the unmutated tests fail without -F. It is 2 when heckle ended the process because a mutant could
 not be contained in-process, after a report on standard error.
 
 Rails works. It was tried on a Rails 8.1 application with SQLite and the
