@@ -8,7 +8,7 @@ class Heckle
     # with file offsets can be applied to a slice such as one def's text.
     def apply(source, base_offset = 0)
       start = start_offset - base_offset
-      source.byteslice(0, start) + replacement + source.byteslice((end_offset - base_offset)..-1)
+      source.dup.bytesplice(start, end_offset - start_offset, replacement)
     end
   end
 end
