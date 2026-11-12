@@ -634,8 +634,7 @@ class TestHeckleRunner < Minitest::Test
   def test_verbose
     out, _err, _status = heckle("Doubler", "double", "-n", "if", "-v", "-t", "test/test_doubler_*.rb")
 
-    # Hash#inspect changed in Ruby 3.4.
-    assert_includes out, { debug: true }.inspect[1..-2]
+    assert_includes out, "debug: true"
     assert_includes out, "Replacing Doubler#double with:"
     assert_includes out, "Tests failed -- this is good"
     assert_includes out, "3 runs, 3 assertions, 0 failures, 0 errors, 0 skips"
