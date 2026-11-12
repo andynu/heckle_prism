@@ -1,4 +1,4 @@
-Money = Struct.new(:cents, keyword_init: true) do
+Money = Data.define(:cents) do
   def dollars
     cents / 100
   end
