@@ -1,4 +1,3 @@
-# Data needs Ruby 3.2, so this file is loaded only where it exists.
 module HeckleBlocks
   Point = Data.define(:x, :y) do
     def sum

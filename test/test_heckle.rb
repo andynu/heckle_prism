@@ -6,8 +6,8 @@ require "fixtures/heckle_dummy"
 require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
 require "fixtures/heckle_blocks"
-require "fixtures/heckle_shorthand" if RUBY_VERSION >= "3.1"
-require "fixtures/heckle_data" if RUBY_VERSION >= "3.2"
+require "fixtures/heckle_shorthand"
+require "fixtures/heckle_data"
 require "heckle"
 require "bounded_process"
 
@@ -153,23 +153,20 @@ class TestHeckle < Minitest::Test
     assert_equal 11, HeckleNesting::Inner.new.limit
   end
 
-  # Data arrived in Ruby 3.2.
-  if RUBY_VERSION >= "3.2"
-    def test_install_and_restore_data_define_method
-      heckler = install_only("HeckleBlocks::Point", "sum", [:lit])
+  def test_install_and_restore_data_define_method
+    heckler = install_only("HeckleBlocks::Point", "sum", [:lit])
 
-      assert_equal 14, HeckleBlocks::Point.new(x: 3, y: 5).sum
-      heckler.restore
-      assert_equal 9, HeckleBlocks::Point.new(x: 3, y: 5).sum
-    end
+    assert_equal 14, HeckleBlocks::Point.new(x: 3, y: 5).sum
+    heckler.restore
+    assert_equal 9, HeckleBlocks::Point.new(x: 3, y: 5).sum
+  end
 
-    def test_install_and_restore_data_define_self_method
-      heckler = install_only("HeckleBlocks::Point", "self.origin_sum", [:lit])
+  def test_install_and_restore_data_define_self_method
+    heckler = install_only("HeckleBlocks::Point", "self.origin_sum", [:lit])
 
-      assert_equal 47, HeckleBlocks::Point.origin_sum
-      heckler.restore
-      assert_equal 42, HeckleBlocks::Point.origin_sum
-    end
+    assert_equal 47, HeckleBlocks::Point.origin_sum
+    heckler.restore
+    assert_equal 42, HeckleBlocks::Point.origin_sum
   end
 
   def test_install_and_restore_struct_method_using_module_constant
@@ -1234,16 +1231,14 @@ class TestHeckle < Minitest::Test
     assert_includes error.message, "bogus"
   end
 
-  # The mutant that does not parse comes from `{foo:}`, Ruby 3.1 syntax.
-  if RUBY_VERSION >= "3.1"
-    def test_unparsable_mutants_are_dropped
-      shorthand = File.expand_path("fixtures/heckle_shorthand.rb", __dir__)
-      def_node = Heckle::MethodFinder.new(File.read(shorthand)).find("HeckleShorthand", "label_shorthand").def_node
-      raw = Heckle::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
+  # The mutant that does not parse comes from the `{foo:}` shorthand.
+  def test_unparsable_mutants_are_dropped
+    shorthand = File.expand_path("fixtures/heckle_shorthand.rb", __dir__)
+    def_node = Heckle::MethodFinder.new(File.read(shorthand)).find("HeckleShorthand", "label_shorthand").def_node
+    raw = Heckle::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
 
-      assert_equal [:lit], raw.map(&:kind)
-      assert_empty heckle("HeckleShorthand", "label_shorthand", [:lit]).mutations
-    end
+    assert_equal [:lit], raw.map(&:kind)
+    assert_empty heckle("HeckleShorthand", "label_shorthand", [:lit]).mutations
   end
 
   def test_random_helpers
