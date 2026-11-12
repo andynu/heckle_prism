@@ -1802,7 +1802,8 @@ class TestHeckle < Minitest::Test
           fork do
             trap("TERM") {} if ignore_term
             ready_writer.puts "started"
-            sleep
+            # On Ruby 4.0.0 a trapped signal ends a bare sleep.
+            loop { sleep }
           end
           sleep
         end
@@ -1847,7 +1848,8 @@ class TestHeckle < Minitest::Test
     heckler = forked("HeckleSubjects", "answer", [:lit], reporter, heckler_class: TermIgnoredHeckler) do
       trap("TERM") {}
       writer.puts "trapped"
-      sleep
+      # On Ruby 4.0.0 a trapped signal ends a bare sleep.
+      loop { sleep }
     end
     heckler.ready = reader
     heckler.writer = writer
