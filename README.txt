@@ -366,9 +366,7 @@ What in-process mode cannot contain:
   such as a loop in a C extension or one enormous bignum computation.
   Heckle's own thread cannot run until the call returns, so neither the
   timeout nor the memory polling acts, and if the call never returns,
-  heckle never ends. The RLIMIT_DATA backstop still bounds memory, but
-  on Ruby 3.2 and 3.3 a process that reaches it with small objects can
-  then spin in garbage collection, using a CPU, until it is killed.
+  heckle never ends. The RLIMIT_DATA backstop still bounds memory.
 * Threads the tests start. A timeout ends the test run in heckle's
   thread, but such a thread keeps running until heckle exits. The
   workers of Minitest's parallelize_me! are the exception: heckle kills
@@ -436,32 +434,20 @@ passed runs after the mutant is loaded. So when heckle heckles its own
 methods, a mutant of a method on that path judges itself, and its
 result says nothing. Those methods are Heckle#tests_pass?,
 Heckle.tests_pass? and Heckle.quietly, and any tests_pass? a subclass
-defines. Their mutants still run; treat what
-heckle reports for them as unknown. The other methods are judged by
+defines. Their mutants still run; treat what heckle reports for them
+as unknown. The other methods are judged by
 unmutated code: install is already running when its mutant replaces
 it, and the outcome is read in the parent.
 
 == REQUIREMENTS:
 
-* Ruby 2.7 or later, which is every Ruby that prism installs on. The
-  test suite passes on 2.7.8, 3.0.7, 3.1.7, 3.2.11, 3.3.13, 3.4.12 and
-  4.0.9.
-* prism 1.5.1 or later. 1.5.1, 1.8.0, 1.8.2, 1.9.0 and 2.1.0 pass the
-  test suite; 1.4.0 does not. Ruby 3.3 ships prism 0.19, so a newer
-  prism gem is installed there. Before Ruby 3.3 there is no prebuilt
-  prism 2 gem and it compiles on install. On Ruby 2.7 the RubyGems and
-  Bundler that come with it pick a prebuilt gem that needs Ruby 3.3 and
-  stop: use "gem install prism --platform ruby", or set Bundler's
-  force_ruby_platform.
-* minitest 5.16.0 or later. 5.16.0, 5.21.0, 5.26.1, 5.27.0, 6.0.6 and
-  6.1.0 pass the test suite on at least one Ruby. The minitest that
-  comes with Ruby 2.7, 3.0 and 3.1 (5.13 to 5.15) is too old, so a newer
-  one is installed there. On Ruby 3.4 use minitest 5.25 or later:
-  5.16 to 5.20 need mutex_m, which Ruby 3.4 no longer includes.
-* With prism 1, a block whose parameter is named "it" loses that
-  parameter's mutant on Ruby 3.3 and earlier, because prism 1 reads the
-  source as the newest Ruby would. prism 2 reads it as the running Ruby
-  does.
+* Ruby 3.4 or later. The test suite passes on 3.4.2, 3.4.12, 4.0.0 and
+  4.0.9. For Ruby 2.7 to 3.3, use heckle 3.
+* prism 2.0.0 or later. 2.0.0 and 2.1.0 pass the test suite on each of
+  those Rubies. Ruby 3.4 and 4.0 come with prism 1, so prism 2 is
+  installed as a gem. prism 2.0 and 2.1 do not install on Ruby 4.1.
+* minitest 6.1.0 or later. minitest 6.0 requires prism 1, and
+  minitest 5 is not supported.
 * diff(1) on the PATH, which prints each surviving mutant against the
   original method
 
