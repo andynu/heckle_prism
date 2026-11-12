@@ -2,8 +2,8 @@ PATH
   remote: .
   specs:
     heckle (3.0.1)
-      minitest (>= 5.16.0)
-      prism (>= 1.5.1)
+      minitest (>= 6.1.0)
+      prism (>= 2.0.0)
 
 GEM
   remote: https://rubygems.org/

@@ -31,12 +31,11 @@ class TestGemspec < Minitest::Test
   def test_runtime_dependencies
     deps = spec.runtime_dependencies.to_h { |dep| [dep.name, dep.requirement.to_s] }
 
-    assert_equal({ "minitest" => ">= 5.16.0", "prism" => ">= 1.5.1" }, deps)
+    assert_equal({ "minitest" => ">= 6.1.0", "prism" => ">= 2.0.0" }, deps)
   end
 
-  # Ruby 2.7 is the oldest Ruby any prism release installs on.
   def test_ruby_floor
-    assert_equal ">= 2.7.0", spec.required_ruby_version.to_s
+    assert_equal ">= 3.4.0", spec.required_ruby_version.to_s
   end
 
   # The gemspec reads the version without loading prism or minitest.

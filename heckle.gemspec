@@ -14,8 +14,7 @@ Gem::Specification.new do |spec|
     do anything.
   TEXT
 
-  # The oldest Ruby any prism release installs on.
-  spec.required_ruby_version = ">= 2.7.0"
+  spec.required_ruby_version = ">= 3.4.0"
 
   spec.files = Dir.chdir(__dir__) do
     `git ls-files -z lib bin README.txt History.txt`.split("\x0")
@@ -24,7 +23,7 @@ Gem::Specification.new do |spec|
   spec.executables = ["heckle"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "prism", ">= 1.5.1"
-  # Minitest.seed, which the in-process run reads, arrived in 5.16.0.
-  spec.add_dependency "minitest", ">= 5.16.0"
+  spec.add_dependency "prism", ">= 2.0.0"
+  # 6.0.x requires prism ~> 1.5, so 6.1.0 is the oldest that loads beside prism 2.
+  spec.add_dependency "minitest", ">= 6.1.0"
 end
