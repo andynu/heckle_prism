@@ -9,11 +9,12 @@ the classes are named heckle_prism and HecklePrism.
 
 ## Provenance
 
-heckle_prism is a rewrite of [heckle](https://github.com/seattlerb/heckle)
-by Ryan Davis and Kevin Clark of seattle.rb, whose last commit there is
-6c47800 (2013-05-09). heckle's ideas, its command line, its mutation
-kinds and its Reporter's messages are the model for this one, and its
-history is kept in this repository.
+heckle_prism began as a fork of
+[heckle](https://github.com/seattlerb/heckle) by Ryan Davis and Kevin
+Clark of seattle.rb, taken at heckle's last commit, 6c47800 (2013-05-09),
+and has since been rewritten on Prism. heckle's ideas, its command line,
+its mutation kinds and its Reporter's messages are the model for this
+one, and heckle's history up to 6c47800 is kept in this repository.
 
 Ryan Davis, Kevin Clark and seattle.rb were not involved in heckle_prism.
 They did not write it, have not reviewed it and are not responsible for

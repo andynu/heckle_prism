@@ -19,9 +19,9 @@ Gem::Specification.new do |spec|
     heckle_prism is a mutation tester. It modifies your code and runs your
     tests to make sure they fail. If code can be changed and your tests don't
     notice, either that code isn't being covered or it doesn't do anything.
-    It is a Prism rewrite of heckle by Ryan Davis and Kevin Clark, written by
-    Claude (Fable 5.2) under the direction of Andy Nutter-Upham. The original
-    authors were not involved in it.
+    It began as a fork of heckle by Ryan Davis and Kevin Clark and was
+    rewritten on Prism by Claude (Fable 5.2) under the direction of Andy
+    Nutter-Upham. The original authors were not involved in the rewrite.
   TEXT
 
   spec.required_ruby_version = ">= 3.4.0"
