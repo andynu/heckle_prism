@@ -388,7 +388,8 @@ swallowed, and --fork, and ends the process at once with exit status 2.
 It does not restore the method, print results or run at_exit handlers.
 A test run that returns normally after its timeout was swallowed counts
 as timed out, never as a survivor. From the deadline to the end of the
-process took 2.1 to 2.5 seconds on Ruby 2.7.8 through 4.0.9.
+process took 2.0 to 2.6 seconds, measured on 2026-11-16 in ten runs each
+on Ruby 3.4.2, 3.4.12, 4.0.0 and 4.0.9.
 
 **The memory limit.** heckle prints it on the line after "Timeout set to N
 seconds.". By default it is the heckle process's resident memory after
@@ -413,11 +414,19 @@ one C call asking for gigabytes at once, fails with NoMemoryError
 before the polling could see it, and is reported the same way.
 Processes the tests start inherit the lowered limit.
 
-With tight allocation loops, against a limit 1 GiB above the starting
-memory, resident memory peaked 2 to 298 MB over the limit in-process
-and 0 to 149 MB over it in fork mode, on Ruby 2.7.8 through 4.0.9.
-In-process the polling thread has to wait for Ruby's global VM lock,
-and a long garbage collection holds it.
+How far over the limit memory gets was measured on 2026-11-16 with two
+tight allocation loops, one appending 1 MiB strings and one appending
+100-byte strings, against the default limit (1 GiB above the starting
+memory), in five runs each on Ruby 3.4.2, 3.4.12, 4.0.0 and 4.0.9. In
+fork mode peak resident memory went 3 to 118 MB over the limit.
+In-process it went 168 to 478 MB over with the 100-byte strings and 641
+to 1016 MB over with the 1 MiB strings. The polling saw the limit
+crossed, but the mutant went on allocating between that reading and the
+end of the process, so the resident memory in the report is lower than
+the peak. With the 1 MiB strings, most runs stopped only at the
+RLIMIT_DATA backstop, about 1 GiB past the limit. In-process the polling
+thread has to wait for Ruby's global VM lock, and a long garbage
+collection holds it. Use --fork when a mutant may allocate fast.
 
 What in-process mode cannot contain:
 
