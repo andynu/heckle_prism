@@ -3,15 +3,23 @@ require_relative "lib/heckle_prism/version"
 Gem::Specification.new do |spec|
   spec.name = "heckle_prism"
   spec.version = HecklePrism::VERSION
-  spec.authors = ["Ryan Davis", "Pete Higgins"]
+  spec.authors = ["Andy Nutter-Upham"]
   spec.license = "MIT"
+  spec.homepage = "https://github.com/andynu/heckle_prism"
+  spec.metadata = {
+    "source_code_uri" => spec.homepage,
+    "changelog_uri" => "#{spec.homepage}/blob/main/CHANGELOG.md",
+    "bug_tracker_uri" => "#{spec.homepage}/issues"
+  }
 
-  spec.summary = "Heckle is unit test sadism(tm) at its core."
+  spec.summary = "A mutation tester for Minitest, built on Prism."
   spec.description = <<~TEXT.tr("\n", " ").strip
-    Heckle is a mutation tester. It modifies your code and runs your tests
-    to make sure they fail. The idea is that if code can be changed and your
-    tests don't notice, either that code isn't being covered or it doesn't
-    do anything.
+    heckle_prism is a mutation tester. It modifies your code and runs your
+    tests to make sure they fail. If code can be changed and your tests don't
+    notice, either that code isn't being covered or it doesn't do anything.
+    It is a Prism rewrite of heckle by Ryan Davis and Kevin Clark, written by
+    Claude (Fable 5.2) under the direction of Andy Nutter-Upham. The original
+    authors were not involved in it.
   TEXT
 
   spec.required_ruby_version = ">= 3.4.0"
