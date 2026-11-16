@@ -13,8 +13,9 @@ heckle_prism began as a fork of
 [heckle](https://github.com/seattlerb/heckle) by Ryan Davis and Kevin
 Clark of seattle.rb, taken at heckle's last commit, 6c47800 (2013-05-09),
 and has since been rewritten on Prism. heckle's ideas, its command line,
-its mutation kinds and its Reporter's messages are the model for this
-one, and heckle's history up to 6c47800 is kept in this repository.
+its mutation kinds and its output are the model for this one. This
+repository starts at the fork, and heckle's own history is in its
+repository.
 
 Ryan Davis, Kevin Clark and seattle.rb were not involved in heckle_prism.
 They did not write it, have not reviewed it and are not responsible for
@@ -24,7 +25,7 @@ The rewrite replaces ruby_parser, ruby2ruby and sexp_processor with Prism.
 It was written by Claude (Fable 5.2, made by Anthropic) under the
 direction of Andy Nutter-Upham. The commits are authored by him and carry
 no per-commit note of which model wrote them; this section is that note
-for all of them since 6c47800.
+for all of them.
 
 Versions 3.0.0 and 3.0.1 were bridge versions during the rewrite and
 were still named heckle. They were never published and exist only as the
