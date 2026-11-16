@@ -2,8 +2,8 @@ require "minitest/autorun"
 require "heckle_prism/method_finder"
 
 class TestMethodFinder < Minitest::Test
-  FIXTURE = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
-  INNER_CLASS = "HeckleDummy::OuterNesting::InnerNesting::InnerClass"
+  FIXTURE = File.expand_path("fixtures/specimen.rb", __dir__)
+  INNER_CLASS = "Specimen::Freezer::Shelf::Box"
 
   def fixture_finder
     @fixture_finder ||= HecklePrism::MethodFinder.new(File.read(FIXTURE))
@@ -22,77 +22,77 @@ class TestMethodFinder < Minitest::Test
   end
 
   def test_instance_method
-    result = find_in_fixture("HeckleDummy", "uses_if")
+    result = find_in_fixture("Specimen", "branch_if")
 
     assert_instance_of Prism::DefNode, result.def_node
-    assert_equal :uses_if, result.def_node.name
-    assert_equal 109, result.def_node.location.start_line
+    assert_equal :branch_if, result.def_node.name
+    assert_equal 51, result.def_node.location.start_line
     assert_nil result.def_node.receiver
   end
 
   def test_class_method
-    result = find_in_fixture("HeckleDummy", "self.is_a_klass_method?")
+    result = find_in_fixture("Specimen", "self.sterile?")
 
-    assert_equal 156, result.def_node.location.start_line
+    assert_equal 143, result.def_node.location.start_line
     assert_instance_of Prism::SelfNode, result.def_node.receiver
-    assert_equal "true", body_of(result)
+    assert_equal "false", body_of(result)
   end
 
   def test_method_name_may_be_a_symbol
-    result = find_in_fixture("HeckleDummy", :uses_if)
+    result = find_in_fixture("Specimen", :branch_if)
 
-    assert_equal 109, result.def_node.location.start_line
+    assert_equal 51, result.def_node.location.start_line
   end
 
-  def test_outer_nesting_foo
-    result = find_in_fixture("HeckleDummy::OuterNesting", "foo")
+  def test_outer_module_position
+    result = find_in_fixture("Specimen::Freezer", "position")
 
-    assert_equal "-1", body_of(result)
-    assert_equal 161, result.def_node.location.start_line
+    assert_equal ":freezer", body_of(result)
+    assert_equal 148, result.def_node.location.start_line
   end
 
-  def test_inner_class_bar
-    result = find_in_fixture(INNER_CLASS, "bar")
+  def test_inner_class_capacity
+    result = find_in_fixture(INNER_CLASS, "capacity")
 
-    assert_equal "-1", body_of(result)
+    assert_equal "81", body_of(result)
+    assert_equal 158, result.def_node.location.start_line
+  end
+
+  def test_inner_class_position_in_reopened_class
+    result = find_in_fixture(INNER_CLASS, "position")
+
+    assert_equal ":box", body_of(result)
+    assert_equal 176, result.def_node.location.start_line
+  end
+
+  def test_lookalike_module_position
+    result = find_in_fixture("#{INNER_CLASS}::Lookalike", "position")
+
+    assert_equal ":lookalike", body_of(result)
     assert_equal 171, result.def_node.location.start_line
   end
 
-  def test_inner_class_foo_in_reopened_class
-    result = find_in_fixture(INNER_CLASS, "foo")
+  def test_reopened_module_position_selected_by_line
+    first = fixture_finder.find("Specimen::Freezer::Shelf", "position", line: 153)
+    second = fixture_finder.find("Specimen::Freezer::Shelf", "position", line: 165)
 
-    assert_equal "1337", body_of(result)
-    assert_equal 189, result.def_node.location.start_line
-  end
-
-  def test_decoy_nesting_foo
-    result = find_in_fixture("#{INNER_CLASS}::DecoyNesting", "foo")
-
-    assert_equal "-4", body_of(result)
-    assert_equal 184, result.def_node.location.start_line
-  end
-
-  def test_reopened_module_foo_selected_by_line
-    first = fixture_finder.find("HeckleDummy::OuterNesting::InnerNesting", "foo", line: 166)
-    second = fixture_finder.find("HeckleDummy::OuterNesting::InnerNesting", "foo", line: 178)
-
-    assert_equal "-2", body_of(first)
-    assert_equal 160, first.nesting[1].location.start_line
-    assert_equal 165, first.nesting[2].location.start_line
-    assert_equal "-3", body_of(second)
-    assert_equal 177, second.nesting[2].location.start_line
+    assert_equal ":upper_shelf", body_of(first)
+    assert_equal 147, first.nesting[1].location.start_line
+    assert_equal 152, first.nesting[2].location.start_line
+    assert_equal ":lower_shelf", body_of(second)
+    assert_equal 164, second.nesting[2].location.start_line
   end
 
   def test_last_definition_wins_without_line
-    result = find_in_fixture("HeckleDummy::OuterNesting::InnerNesting", "foo")
+    result = find_in_fixture("Specimen::Freezer::Shelf", "position")
 
-    assert_equal "-3", body_of(result)
-    assert_equal 178, result.def_node.location.start_line
+    assert_equal ":lower_shelf", body_of(result)
+    assert_equal 165, result.def_node.location.start_line
   end
 
   def test_line_matching_no_def_is_nil
-    assert_nil fixture_finder.find("HeckleDummy::OuterNesting::InnerNesting", "foo", line: 167)
-    assert_nil fixture_finder.find("HeckleDummy", "uses_if", line: 110)
+    assert_nil fixture_finder.find("Specimen::Freezer::Shelf", "position", line: 154)
+    assert_nil fixture_finder.find("Specimen", "branch_if", line: 52)
   end
 
   def test_line_uses_the_def_keyword_line
@@ -110,22 +110,22 @@ class TestMethodFinder < Minitest::Test
   end
 
   def test_missing_method_is_nil
-    assert_nil find_in_fixture("HeckleDummy", "no_such_method")
+    assert_nil find_in_fixture("Specimen", "no_such_method")
   end
 
   def test_missing_class_is_nil
-    assert_nil find_in_fixture("HeckleDummy::NoSuchClass", "foo")
-    assert_nil find_in_fixture("NoSuchClass", "uses_if")
+    assert_nil find_in_fixture("Specimen::NoSuchClass", "position")
+    assert_nil find_in_fixture("NoSuchClass", "branch_if")
   end
 
   def test_nesting_is_outermost_first
-    nesting = find_in_fixture(INNER_CLASS, "foo").nesting
+    nesting = find_in_fixture(INNER_CLASS, "position").nesting
 
     assert_equal [Prism::ClassNode, Prism::ModuleNode, Prism::ModuleNode, Prism::ClassNode],
                  nesting.map(&:class)
-    assert_equal %w[HeckleDummy OuterNesting InnerNesting InnerClass],
+    assert_equal %w[Specimen Freezer Shelf Box],
                  nesting.map { |node| node.constant_path.slice }
-    assert_equal [1, 160, 177, 182], nesting.map { |node| node.location.start_line }
+    assert_equal [5, 147, 164, 169], nesting.map { |node| node.location.start_line }
   end
 
   def test_compact_class_header

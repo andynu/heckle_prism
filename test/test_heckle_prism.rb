@@ -2,7 +2,7 @@ require "minitest/autorun"
 require "open3"
 require "rbconfig"
 require "tmpdir"
-require "fixtures/heckle_dummy"
+require "fixtures/specimen"
 require "fixtures/heckle_subjects"
 require "fixtures/heckle_frozen"
 require "fixtures/heckle_blocks"
@@ -58,7 +58,7 @@ class ScriptedHeckler < TestHeckler
 end
 
 class TestHecklePrism < Minitest::Test
-  DUMMY = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
+  SPECIMEN = File.expand_path("fixtures/specimen.rb", __dir__)
   SUBJECTS = File.expand_path("fixtures/heckle_subjects.rb", __dir__)
   FROZEN = File.expand_path("fixtures/heckle_frozen.rb", __dir__)
 
@@ -526,10 +526,10 @@ class TestHecklePrism < Minitest::Test
 
   def test_validate_without_mutations
     reporter = RecordingReporter.new
-    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, reporter) { flunk "no run expected" }
+    heckler = scripted("Specimen", "inert", HecklePrism::MUTATABLE_NODES, reporter) { flunk "no run expected" }
 
     assert_nil heckler.validate
-    assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
+    assert_equal [[:no_mutations, "Specimen", :inert]], reporter.calls
     assert_equal 0, heckler.count
   end
 
@@ -989,7 +989,7 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_thick_skin_has_no_totals_line
-    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
+    heckler = scripted("Specimen", "inert", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
 
     out, _err = capture_io { heckler.validate }
 
@@ -1021,11 +1021,11 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_real_reporter_thick_skin_names_the_class
-    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
+    heckler = scripted("Specimen", "inert", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
 
     out, _err = capture_io { heckler.validate }
 
-    assert_includes out, "!!! HeckleDummy#uses_nothing has a thick skin. There's nothing to heckle.\n"
+    assert_includes out, "!!! Specimen#inert has a thick skin. There's nothing to heckle.\n"
   end
 
   def test_install_and_restore_are_silent_under_verbose
@@ -1067,49 +1067,49 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_instance_method
-    heckler = heckle("HeckleDummy", "uses_literal")
+    heckler = heckle("Specimen", "one_literal")
 
-    assert_equal HeckleDummy, heckler.klass
-    assert_equal "HeckleDummy", heckler.klass_name
-    assert_equal :uses_literal, heckler.method_name
-    assert_equal "def uses_literal\n    i = 1\n  end", heckler.original_source
+    assert_equal Specimen, heckler.klass
+    assert_equal "Specimen", heckler.klass_name
+    assert_equal :one_literal, heckler.method_name
+    assert_equal "def one_literal\n    9\n  end", heckler.original_source
     assert_equal [], heckler.failures
     assert_equal 0, heckler.count
   end
 
   def test_class_method
-    heckler = heckle("HeckleDummy", "self.is_a_klass_method?")
+    heckler = heckle("Specimen", "self.sterile?")
 
-    assert_equal :"self.is_a_klass_method?", heckler.method_name
-    assert_equal "def self.is_a_klass_method?\n    true\n  end", heckler.original_source
+    assert_equal :"self.sterile?", heckler.method_name
+    assert_equal "def self.sterile?\n    false\n  end", heckler.original_source
   end
 
   def test_nested_class
-    heckler = heckle("HeckleDummy::OuterNesting::InnerNesting::InnerClass", "foo")
+    heckler = heckle("Specimen::Freezer::Shelf::Box", "position")
 
-    assert_equal HeckleDummy::OuterNesting::InnerNesting::InnerClass, heckler.klass
-    assert_equal "def foo\n          1337\n        end", heckler.original_source
+    assert_equal Specimen::Freezer::Shelf::Box, heckler.klass
+    assert_equal "def position\n          :box\n        end", heckler.original_source
   end
 
   def test_twice_defined_method_resolves_to_live_definition
-    heckler = heckle("HeckleDummy::OuterNesting::InnerNesting", "foo")
+    heckler = heckle("Specimen::Freezer::Shelf", "position")
 
-    assert_equal "def foo\n        -3\n      end", heckler.original_source
-    assert_equal [DUMMY, 178],
-                 HeckleDummy::OuterNesting::InnerNesting.instance_method(:foo).source_location.first(2)
+    assert_equal "def position\n        :lower_shelf\n      end", heckler.original_source
+    assert_equal [SPECIMEN, 165],
+                 Specimen::Freezer::Shelf.instance_method(:position).source_location.first(2)
   end
 
   def test_unknown_class
-    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy::Nope", "foo") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("Specimen::Nope", "foo") }
 
-    assert_equal "HeckleDummy::Nope#foo: no such class HeckleDummy::Nope", error.message
+    assert_equal "Specimen::Nope#foo: no such class Specimen::Nope", error.message
   end
 
   # Object's constants are reachable from any class by inheritance.
   def test_class_path_does_not_resolve_through_ancestors
-    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjects::HeckleDummy", "uses_literal") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjects::Specimen", "one_literal") }
 
-    assert_equal "HeckleSubjects::HeckleDummy#uses_literal: no such class HeckleSubjects::HeckleDummy",
+    assert_equal "HeckleSubjects::Specimen#one_literal: no such class HeckleSubjects::Specimen",
                  error.message
   end
 
@@ -1120,16 +1120,16 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_unknown_method
-    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "nope") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("Specimen", "nope") }
 
-    assert_includes error.message, "HeckleDummy#nope"
+    assert_includes error.message, "Specimen#nope"
     assert_includes error.message, "no such method"
   end
 
   def test_unknown_class_method
-    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "self.uses_literal") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("Specimen", "self.one_literal") }
 
-    assert_includes error.message, "HeckleDummy#self.uses_literal"
+    assert_includes error.message, "Specimen#self.one_literal"
   end
 
   def test_define_method_has_no_usable_source
@@ -1140,9 +1140,9 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_attr_accessor_has_no_usable_source
-    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "names") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("Specimen", "labels") }
 
-    assert_includes error.message, "HeckleDummy#names"
+    assert_includes error.message, "Specimen#labels"
   end
 
   def test_c_method_has_no_source_location
@@ -1172,61 +1172,64 @@ class TestHecklePrism < Minitest::Test
     assert_equal "def answer\n    42\n  end", heckle("HeckleSubjectsHalfLoaded", "answer").original_source
   end
 
-  def test_mutations_for_many_things
-    heckler = heckle("HeckleDummy", "uses_many_things")
-    source = File.read(DUMMY)
+  def test_mutations_for_assay
+    heckler = heckle("Specimen", "assay")
+    source = File.read(SPECIMEN)
     triples = heckler.mutations.map do |mutation|
       text = source.byteslice(mutation.start_offset, mutation.end_offset - mutation.start_offset)
       [mutation.kind, text, mutation.replacement]
     end
 
     expected = [
+      [:lasgn, "0", "nil"],
+      [:lit, "0", "5"],
+      [:until, "until", "while"],
+      [:call, "passes == 3", "nil"],
+      [:lit, "3", "8"],
       [:lasgn, "1", "nil"],
       [:lit, "1", "6"],
       [:while, "while", "until"],
-      [:call, "i < 10", "nil"],
-      [:lit, "10", "15"],
-      [:lasgn, "1", "nil"],
-      [:lit, "1", "6"],
-      [:until, "until", "while"],
-      [:call, "some_func", "nil"],
-      [:call, "some_other_func", "nil"],
-      [:true, "true", "false"],
+      [:call, "labelled?", "nil"],
+      [:call, "relabel", "nil"],
+      [:lit, ":rejected", ":\"l33t h4x0r\""],
       [:if, "if", "unless"],
-      [:call, "\"hi there\" == \"changeling\"", "nil"],
-      [:str, "\"hi there\"", "\"l33t h4x0r\""],
-      [:str, "\"changeling\"", "\"l33t h4x0r\""],
+      [:call, "grade == \"C\"", "nil"],
+      [:call, "grade", "nil"],
+      [:str, "\"C\"", "\"l33t h4x0r\""],
+      [:call, "weight > 2.5", "nil"],
+      [:call, "weight", "nil"],
+      [:lit, "2.5", "7.5"],
       [:false, "false", "true"],
     ]
     assert_equal expected, triples
   end
 
   def test_mutations_filtered_by_if
-    assert_equal [:if], heckle("HeckleDummy", "uses_many_things", [:if]).mutations.map(&:kind)
+    assert_equal [:if], heckle("Specimen", "assay", [:if]).mutations.map(&:kind)
   end
 
   def test_mutations_filtered_by_branch_nodes
-    kinds = heckle("HeckleDummy", "uses_many_things", HecklePrism::BRANCH_NODES).mutations.map(&:kind)
+    kinds = heckle("Specimen", "assay", HecklePrism::BRANCH_NODES).mutations.map(&:kind)
 
-    assert_equal %i[while until if], kinds
+    assert_equal %i[until while if], kinds
   end
 
   def test_mutations_filtered_by_asgn_nodes
-    kinds = heckle("HeckleDummy", "uses_many_things", HecklePrism::ASGN_NODES).mutations.map(&:kind)
+    kinds = heckle("Specimen", "assay", HecklePrism::ASGN_NODES).mutations.map(&:kind)
 
     assert_equal %i[lasgn lasgn], kinds
   end
 
   def test_dasgn_aliases_select_local_assignments
     [[:dasgn], [:dasgn_curr]].each do |nodes|
-      kinds = heckle("HeckleDummy", "uses_many_things", nodes).mutations.map(&:kind)
+      kinds = heckle("Specimen", "assay", nodes).mutations.map(&:kind)
 
       assert_equal %i[lasgn lasgn], kinds, nodes.inspect
     end
   end
 
   def test_unknown_kind
-    error = assert_raises(ArgumentError) { heckle("HeckleDummy", "uses_many_things", [:if, :bogus]) }
+    error = assert_raises(ArgumentError) { heckle("Specimen", "assay", [:if, :bogus]) }
 
     assert_includes error.message, "bogus"
   end
@@ -1242,7 +1245,7 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_random_helpers
-    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("Specimen", "one_literal")
 
     50.times do
       number = heckler.rand_number
@@ -1263,7 +1266,7 @@ class TestHecklePrism < Minitest::Test
 
   # Bounds reached in 1000 draws with probability above 1 - 1e-30.
   def test_rand_number_range_and_symbol_cover_their_spans
-    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("Specimen", "one_literal")
     numbers = Array.new(1000) { heckler.rand_number }
     ranges = Array.new(1000) { heckler.rand_range }
     symbols = Array.new(1000) { heckler.rand_symbol.to_s }
@@ -1276,7 +1279,7 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_rand_string_is_printable_ascii
-    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("Specimen", "one_literal")
     strings = Array.new(1000) { heckler.rand_string }
 
     strings.each { |string| assert_match(/\A[ -~]{0,49}\z/, string) }
@@ -1284,7 +1287,7 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_drawn_strings_make_valid_string_and_regex_mutants
-    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("Specimen", "one_literal")
     source = "def m\n  [\"x\", /y/]\nend\n"
     def_node = Prism.parse(source).value.statements.body.first
     drawn = []
@@ -1309,19 +1312,19 @@ class TestHecklePrism < Minitest::Test
   end
 
   def test_nothing_to_mutate
-    assert_empty heckle("HeckleDummy", "uses_nothing").mutations
+    assert_empty heckle("Specimen", "inert").mutations
   end
 
   def test_mutant_source_changes_one_site
-    heckler = heckle("HeckleDummy", "uses_same_literal", [:lit])
+    heckler = heckle("Specimen", "repeated_literal", [:lit])
     mutants = heckler.mutations.map { |mutation| heckler.mutant_source(mutation) }
 
     assert_equal [
-      "def uses_same_literal\n    i = 6\n    i = 1\n    i = 1\n  end",
-      "def uses_same_literal\n    i = 1\n    i = 6\n    i = 1\n  end",
-      "def uses_same_literal\n    i = 1\n    i = 1\n    i = 6\n  end",
+      "def repeated_literal\n    dose = 12\n    dose += 7\n    dose * 7\n  end",
+      "def repeated_literal\n    dose = 7\n    dose += 12\n    dose * 7\n  end",
+      "def repeated_literal\n    dose = 7\n    dose += 7\n    dose * 12\n  end",
     ], mutants
-    assert_equal "def uses_same_literal\n    i = 1\n    i = 1\n    i = 1\n  end", heckler.original_source
+    assert_equal "def repeated_literal\n    dose = 7\n    dose += 7\n    dose * 7\n  end", heckler.original_source
   end
 
   # Fork mode. Scripts run in the forked child, so they report back through
@@ -1631,10 +1634,10 @@ class TestHecklePrism < Minitest::Test
 
   def test_fork_thick_skin_forks_nothing
     reporter = RecordingReporter.new
-    heckler = forked("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, reporter) { flunk }
+    heckler = forked("Specimen", "inert", HecklePrism::MUTATABLE_NODES, reporter) { flunk }
 
     assert_nil with_fork { heckler.validate }
-    assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
+    assert_equal [[:no_mutations, "Specimen", :inert]], reporter.calls
     assert_empty heckler.pids
   end
 

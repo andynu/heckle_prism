@@ -3,7 +3,7 @@ require "heckle_prism/method_finder"
 require "heckle_prism/mutator"
 
 class TestMutator < Minitest::Test
-  FIXTURE = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
+  FIXTURE = File.expand_path("fixtures/specimen.rb", __dir__)
 
   Randomizer = Struct.new(:rand_number, :rand_string, :rand_symbol, :rand_range)
 
@@ -13,10 +13,10 @@ class TestMutator < Minitest::Test
     @fixture_source ||= File.read(FIXTURE)
   end
 
-  # Mutated sources of HeckleDummy#method_name, in mutation order. Lines after
+  # Mutated sources of Specimen#method_name, in mutation order. Lines after
   # the first lose the def's indentation, so expectations read as flush-left.
   def fixture_mutants(method_name, kinds, randomizer = STUB)
-    def_node = HecklePrism::MethodFinder.new(fixture_source).find("HeckleDummy", method_name).def_node
+    def_node = HecklePrism::MethodFinder.new(fixture_source).find("Specimen", method_name).def_node
     mutants_of(def_node, kinds, randomizer)
   end
 
@@ -53,105 +53,105 @@ class TestMutator < Minitest::Test
   def test_true_and_false
     expected = [
       <<~RUBY,
-        def uses_boolean
-          a = false
-          b = false
+        def booleans
+          sealed = false
+          sealed && false
         end
       RUBY
       <<~RUBY,
-        def uses_boolean
-          a = true
-          b = true
+        def booleans
+          sealed = true
+          sealed && true
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_boolean", [:true, :false])
+    assert_mutants expected, fixture_mutants("booleans", [:true, :false])
   end
 
   def test_true_and_false_are_separate_kinds
-    assert_equal 1, fixture_mutants("uses_boolean", :true).size
-    assert_equal 1, fixture_mutants("uses_boolean", :false).size
+    assert_equal 1, fixture_mutants("booleans", :true).size
+    assert_equal 1, fixture_mutants("booleans", :false).size
   end
 
   def test_class_method_boolean
     expected = [
       <<~RUBY,
-        def self.is_a_klass_method?
-          false
+        def self.sterile?
+          true
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("self.is_a_klass_method?", [:true, :false])
+    assert_mutants expected, fixture_mutants("self.sterile?", [:true, :false])
   end
 
   def test_numeric_literals
     expected = [
       <<~RUBY,
-        def uses_numeric_literals
-          i = 6
-          i += 2147483648
-          i -= 3.5
+        def numbers
+          count = 8
+          count += 4294967296
+          count -= 0.25
         end
       RUBY
       <<~RUBY,
-        def uses_numeric_literals
-          i = 1
-          i += 2147483653
-          i -= 3.5
+        def numbers
+          count = 3
+          count += 4294967301
+          count -= 0.25
         end
       RUBY
       <<~RUBY,
-        def uses_numeric_literals
-          i = 1
-          i += 2147483648
-          i -= 8.5
+        def numbers
+          count = 3
+          count += 4294967296
+          count -= 5.25
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_numeric_literals", :lit)
+    assert_mutants expected, fixture_mutants("numbers", :lit)
   end
 
   def test_same_literal_mutates_each_site
     expected = [
       <<~RUBY,
-        def uses_same_literal
-          i = 6
-          i = 1
-          i = 1
+        def repeated_literal
+          dose = 12
+          dose += 7
+          dose * 7
         end
       RUBY
       <<~RUBY,
-        def uses_same_literal
-          i = 1
-          i = 6
-          i = 1
+        def repeated_literal
+          dose = 7
+          dose += 12
+          dose * 7
         end
       RUBY
       <<~RUBY,
-        def uses_same_literal
-          i = 1
-          i = 1
-          i = 6
+        def repeated_literal
+          dose = 7
+          dose += 7
+          dose * 12
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_same_literal", :lit)
+    assert_mutants expected, fixture_mutants("repeated_literal", :lit)
   end
 
   def test_single_literal
     expected = [
       <<~RUBY,
-        def uses_literal
-          i = 6
+        def one_literal
+          14
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_literal", :lit)
+    assert_mutants expected, fixture_mutants("one_literal", :lit)
   end
 
   def test_negative_literal
@@ -193,29 +193,29 @@ class TestMutator < Minitest::Test
   def test_strings
     expected = [
       <<~RUBY,
-        def uses_strings
-          @names << "l33t h4x0r"
-          @names << "Hello, Jeff"
-          @names << "Hi, Frank"
+        def strings
+          @labels << "l33t h4x0r"
+          @labels << "blood smear"
+          @labels << "core sample"
         end
       RUBY
       <<~RUBY,
-        def uses_strings
-          @names << "Hello, Robert"
-          @names << "l33t h4x0r"
-          @names << "Hi, Frank"
+        def strings
+          @labels << "agar plate"
+          @labels << "l33t h4x0r"
+          @labels << "core sample"
         end
       RUBY
       <<~RUBY,
-        def uses_strings
-          @names << "Hello, Robert"
-          @names << "Hello, Jeff"
-          @names << "l33t h4x0r"
+        def strings
+          @labels << "agar plate"
+          @labels << "blood smear"
+          @labels << "l33t h4x0r"
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_strings", :str)
+    assert_mutants expected, fixture_mutants("strings", :str)
   end
 
   def test_other_string_literal_forms
@@ -280,29 +280,23 @@ class TestMutator < Minitest::Test
   def test_symbols
     expected = [
       <<~RUBY,
-        def uses_symbols
-          i = :"l33t h4x0r"
-          i = :blah
-          i = :and_blah
+        def symbols
+          [:"l33t h4x0r", :thawed, :frozen]
         end
       RUBY
       <<~RUBY,
-        def uses_symbols
-          i = :blah
-          i = :"l33t h4x0r"
-          i = :and_blah
+        def symbols
+          [:thawed, :"l33t h4x0r", :frozen]
         end
       RUBY
       <<~RUBY,
-        def uses_symbols
-          i = :blah
-          i = :blah
-          i = :"l33t h4x0r"
+        def symbols
+          [:thawed, :thawed, :"l33t h4x0r"]
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_symbols", :lit)
+    assert_mutants expected, fixture_mutants("symbols", :lit)
   end
 
   def test_quoted_symbols
@@ -338,29 +332,23 @@ class TestMutator < Minitest::Test
   def test_regexes
     expected = [
       <<~'RUBY',
-        def uses_regexes
-          i = /l33t\ h4x0r/
-          i = /c{2,4}+/
-          i = /123/
+        def regexes
+          [/l33t\ h4x0r/, /\d{2,3}/, /smear/]
         end
       RUBY
       <<~'RUBY',
-        def uses_regexes
-          i = /a.*/
-          i = /l33t\ h4x0r/
-          i = /123/
+        def regexes
+          [/[ACGT]+/, /l33t\ h4x0r/, /smear/]
         end
       RUBY
       <<~'RUBY',
-        def uses_regexes
-          i = /a.*/
-          i = /c{2,4}+/
-          i = /l33t\ h4x0r/
+        def regexes
+          [/[ACGT]+/, /\d{2,3}/, /l33t\ h4x0r/]
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_regexes", :lit)
+    assert_mutants expected, fixture_mutants("regexes", :lit)
   end
 
   def test_hostile_random_string_regex_matches_literally
@@ -389,29 +377,23 @@ class TestMutator < Minitest::Test
   def test_ranges
     expected = [
       <<~RUBY,
-        def uses_ranges
-          i = 5..10
-          i = -1..9
-          i = 1..4
+        def ranges
+          [5..10, -3..8, 0..7]
         end
       RUBY
       <<~RUBY,
-        def uses_ranges
-          i = 6..100
-          i = 5..10
-          i = 1..4
+        def ranges
+          [2..40, 5..10, 0..7]
         end
       RUBY
       <<~RUBY,
-        def uses_ranges
-          i = 6..100
-          i = -1..9
-          i = 5..10
+        def ranges
+          [2..40, -3..8, 5..10]
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_ranges", :lit)
+    assert_mutants expected, fixture_mutants("ranges", :lit)
   end
 
   def test_range_with_negative_end_is_one_mutation
@@ -434,29 +416,29 @@ class TestMutator < Minitest::Test
   def test_while
     expected = [
       <<~RUBY,
-        def uses_while
-          until some_func
-            some_other_func
+        def loop_while
+          until ready?
+            relabel
           end
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_while", :while)
+    assert_mutants expected, fixture_mutants("loop_while", :while)
   end
 
   def test_until
     expected = [
       <<~RUBY,
-        def uses_until
-          while some_func
-            some_other_func
+        def loop_until
+          while labelled?
+            relabel
           end
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_until", :until)
+    assert_mutants expected, fixture_mutants("loop_until", :until)
   end
 
   def test_modifier_loops
@@ -504,72 +486,75 @@ class TestMutator < Minitest::Test
   def test_if
     expected = [
       <<~RUBY,
-        def uses_if
-          unless some_func
-            if some_other_func
-              return
+        def branch_if
+          unless ready?
+            if labelled?
+              :stored
             end
+          else
+            :waiting
           end
         end
       RUBY
       <<~RUBY,
-        def uses_if
-          if some_func
-            unless some_other_func
-              return
+        def branch_if
+          if ready?
+            unless labelled?
+              :stored
             end
+          else
+            :waiting
           end
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_if", :if)
+    assert_mutants expected, fixture_mutants("branch_if", :if)
   end
 
   def test_unless
     expected = [
       <<~RUBY,
-        def uses_unless
-          if true
-            if false
-              return
+        def branch_unless
+          if labelled?
+            if ready?
+              relabel
             end
           end
         end
       RUBY
       <<~RUBY,
-        def uses_unless
-          unless true
-            unless false
-              return
+        def branch_unless
+          unless labelled?
+            unless ready?
+              relabel
             end
           end
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_unless", :if)
+    assert_mutants expected, fixture_mutants("branch_unless", :if)
   end
 
-  def test_modifier_if_in_many_things
+  def test_modifier_if_in_assay
     expected = [
       <<~RUBY,
-        def uses_many_things
-          i = 1
-          while i < 10
-            i += 1
-            until some_func
-              some_other_func
+        def assay
+          passes = 0
+          until passes == 3
+            passes += 1
+            while labelled?
+              relabel
             end
-            return true unless "hi there" == "changeling"
-            return false
+            return :rejected unless grade == "C"
           end
-          i
+          weight > 2.5 || false
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_many_things", :if)
+    assert_mutants expected, fixture_mutants("assay", :if)
   end
 
   def test_block_if_with_else
@@ -667,65 +652,65 @@ class TestMutator < Minitest::Test
   def test_call
     expected = [
       <<~RUBY,
-        def uses_call
+        def calls
           nil
         end
       RUBY
       <<~RUBY,
-        def uses_call
-          nil + some_other_func
+        def calls
+          nil * volume
         end
       RUBY
       <<~RUBY,
-        def uses_call
-          some_func + nil
+        def calls
+          weight * nil
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_call", :call)
+    assert_mutants expected, fixture_mutants("calls", :call)
   end
 
   def test_call_with_block_is_not_a_call
     expected = [
       <<~RUBY,
-        def uses_callblock
-          nil.y { 1 }
+        def call_with_block
+          nil.map { 2 }
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_callblock", [:call])
+    assert_mutants expected, fixture_mutants("call_with_block", [:call])
   end
 
   def test_callblock
     expected = [
       <<~RUBY,
-        def uses_callblock
+        def call_with_block
           nil
         end
       RUBY
       <<~RUBY,
-        def uses_callblock
-          nil.y { 1 }
+        def call_with_block
+          nil.map { 2 }
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_callblock", [:call, :iter])
+    assert_mutants expected, fixture_mutants("call_with_block", [:call, :iter])
   end
 
   def test_iter
     expected = [
       <<~RUBY,
-        def uses_iter
-          x = [ 1, 2, 3 ]
+        def iterates
+          doses = [4, 5, 6]
           nil
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_iter", [:call, :iter])
+    assert_mutants expected, fixture_mutants("iterates", [:call, :iter])
   end
 
   def mutation_kinds(source)
@@ -887,48 +872,50 @@ class TestMutator < Minitest::Test
   def test_lasgn
     expected = [
       <<~RUBY,
-        def uses_lasgn
-          lvar = nil
-          lvar = nil
+        def local_assignments
+          tally = nil
+          tally = nil
+          tally
         end
       RUBY
       <<~RUBY,
-        def uses_lasgn
-          lvar = 5
-          lvar = 42
+        def local_assignments
+          tally = 12
+          tally = 42
+          tally
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_lasgn", :lasgn)
+    assert_mutants expected, fixture_mutants("local_assignments", :lasgn)
   end
 
   def test_operator_writes_are_assignments
     expected = [
       <<~RUBY,
-        def uses_numeric_literals
-          i = nil
-          i += 2147483648
-          i -= 3.5
+        def numbers
+          count = nil
+          count += 4294967296
+          count -= 0.25
         end
       RUBY
       <<~RUBY,
-        def uses_numeric_literals
-          i = 1
-          i += nil
-          i -= 3.5
+        def numbers
+          count = 3
+          count += nil
+          count -= 0.25
         end
       RUBY
       <<~RUBY,
-        def uses_numeric_literals
-          i = 1
-          i += 2147483648
-          i -= nil
+        def numbers
+          count = 3
+          count += 4294967296
+          count -= nil
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_numeric_literals", [:lasgn])
+    assert_mutants expected, fixture_mutants("numbers", [:lasgn])
   end
 
   def test_lasgn_compound_forms
@@ -979,20 +966,20 @@ class TestMutator < Minitest::Test
   def test_iasgn
     expected = [
       <<~RUBY,
-        def uses_iasgn
-          @ivar = nil
-          @ivar = nil
+        def instance_assignments
+          @reading = nil
+          @reading = nil
         end
       RUBY
       <<~RUBY,
-        def uses_iasgn
-          @ivar = 5
-          @ivar = 42
+        def instance_assignments
+          @reading = 0.5
+          @reading = 42
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_iasgn", :iasgn)
+    assert_mutants expected, fixture_mutants("instance_assignments", :iasgn)
   end
 
   def test_iasgn_compound_forms
@@ -1007,20 +994,20 @@ class TestMutator < Minitest::Test
   def test_gasgn
     expected = [
       <<~RUBY,
-        def uses_gasgn
-          $gvar = nil
-          $gvar = nil
+        def global_assignments
+          $batch = nil
+          $batch = nil
         end
       RUBY
       <<~RUBY,
-        def uses_gasgn
-          $gvar = 5
-          $gvar = 42
+        def global_assignments
+          $batch = "B7"
+          $batch = 42
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_gasgn", :gasgn)
+    assert_mutants expected, fixture_mutants("global_assignments", :gasgn)
   end
 
   def test_gasgn_compound_forms
@@ -1035,20 +1022,20 @@ class TestMutator < Minitest::Test
   def test_cvasgn
     expected = [
       <<~RUBY,
-        def uses_cvasgn
-          @@cvar = nil
-          @@cvar = nil
+        def class_variable_assignments
+          @@stock = nil
+          @@stock = nil
         end
       RUBY
       <<~RUBY,
-        def uses_cvasgn
-          @@cvar = 5
-          @@cvar = 42
+        def class_variable_assignments
+          @@stock = :low
+          @@stock = 42
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_cvasgn", :cvasgn)
+    assert_mutants expected, fixture_mutants("class_variable_assignments", :cvasgn)
   end
 
   def test_cvasgn_compound_forms
@@ -1063,42 +1050,81 @@ class TestMutator < Minitest::Test
   def test_masgn
     expected = [
       <<~RUBY,
-        def uses_masgn
-          @_heckle_dummy, $b, c = 5, 6, 7
+        def multiple_assignment
+          @_heckle_dummy, $mid, high = 1, 2, 3
+          high
         end
       RUBY
       <<~RUBY,
-        def uses_masgn
-          @a, $_heckle_dummy, c = 5, 6, 7
+        def multiple_assignment
+          @low, $_heckle_dummy, high = 1, 2, 3
+          high
         end
       RUBY
       <<~RUBY,
-        def uses_masgn
-          @a, $b, _heckle_dummy = 5, 6, 7
+        def multiple_assignment
+          @low, $mid, _heckle_dummy = 1, 2, 3
+          high
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_masgn", [:iasgn, :gasgn, :lasgn])
+    assert_mutants expected, fixture_mutants("multiple_assignment", [:iasgn, :gasgn, :lasgn])
   end
 
   def test_iter_assignment_and_block_parameter
     expected = [
       <<~RUBY,
-        def uses_iter
-          x = nil
-          x.each { |y| y }
+        def iterates
+          doses = nil
+          doses.map { |dose| dose }
         end
       RUBY
       <<~RUBY,
-        def uses_iter
-          x = [ 1, 2, 3 ]
-          x.each { |_heckle_dummy| y }
+        def iterates
+          doses = [4, 5, 6]
+          doses.map { |_heckle_dummy| dose }
         end
       RUBY
     ]
 
-    assert_mutants expected, fixture_mutants("uses_iter", [:lasgn])
+    assert_mutants expected, fixture_mutants("iterates", [:lasgn])
+  end
+
+  # dasgn and dasgn_curr name a block-local assignment; Prism parses it as an
+  # ordinary local write, so it is a :lasgn like the block's parameter.
+  def test_block_local_assignment
+    expected = [
+      <<~RUBY,
+        def block_assignment
+          tray.each do |_heckle_dummy|
+            count = slot
+            count = nil
+            count
+          end
+        end
+      RUBY
+      <<~RUBY,
+        def block_assignment
+          tray.each do |slot|
+            count = nil
+            count = nil
+            count
+          end
+        end
+      RUBY
+      <<~RUBY,
+        def block_assignment
+          tray.each do |slot|
+            count = slot
+            count = 42
+            count
+          end
+        end
+      RUBY
+    ]
+
+    assert_mutants expected, fixture_mutants("block_assignment", [:lasgn])
   end
 
   def test_class_variable_target
@@ -1171,29 +1197,32 @@ class TestMutator < Minitest::Test
     assert_empty inline_mutants(source, ASGN_KINDS)
   end
 
-  def test_many_things_full_list
-    def_node = HecklePrism::MethodFinder.new(fixture_source).find("HeckleDummy", "uses_many_things").def_node
+  def test_assay_full_list
+    def_node = HecklePrism::MethodFinder.new(fixture_source).find("Specimen", "assay").def_node
     mutations = HecklePrism::Mutator.new(STUB).mutations_for(def_node)
     triples = mutations.map do |mutation|
       text = fixture_source.byteslice(mutation.start_offset, mutation.end_offset - mutation.start_offset)
       [mutation.kind, text, mutation.replacement]
     end
     expected = [
+      [:lasgn, "0", "nil"],
+      [:lit, "0", "5"],
+      [:until, "until", "while"],
+      [:call, "passes == 3", "nil"],
+      [:lit, "3", "8"],
       [:lasgn, "1", "nil"],
       [:lit, "1", "6"],
       [:while, "while", "until"],
-      [:call, "i < 10", "nil"],
-      [:lit, "10", "15"],
-      [:lasgn, "1", "nil"],
-      [:lit, "1", "6"],
-      [:until, "until", "while"],
-      [:call, "some_func", "nil"],
-      [:call, "some_other_func", "nil"],
-      [:true, "true", "false"],
+      [:call, "labelled?", "nil"],
+      [:call, "relabel", "nil"],
+      [:lit, ":rejected", ":\"l33t h4x0r\""],
       [:if, "if", "unless"],
-      [:call, "\"hi there\" == \"changeling\"", "nil"],
-      [:str, "\"hi there\"", "\"l33t h4x0r\""],
-      [:str, "\"changeling\"", "\"l33t h4x0r\""],
+      [:call, "grade == \"C\"", "nil"],
+      [:call, "grade", "nil"],
+      [:str, "\"C\"", "\"l33t h4x0r\""],
+      [:call, "weight > 2.5", "nil"],
+      [:call, "weight", "nil"],
+      [:lit, "2.5", "7.5"],
       [:false, "false", "true"],
     ]
 
