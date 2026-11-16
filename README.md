@@ -1,36 +1,38 @@
-= heckle_prism
+# heckle_prism
 
 heckle_prism is heckle rebuilt on Prism. It was called heckle up to
 version 3. Below, "heckle" in prose means this program; the command,
 the gem and the classes are named heckle_prism and HecklePrism.
 
-home :: http://ruby.sadi.st/Heckle.html
-code :: https://github.com/seattlerb/heckle
-rdoc :: http://seattlerb.rubyforge.org/heckle
+- home: http://ruby.sadi.st/Heckle.html
+- code: https://github.com/seattlerb/heckle
+- rdoc: http://seattlerb.rubyforge.org/heckle
 
-== DESCRIPTION:
+## Description
 
 Heckle is unit test sadism(tm) at its core. Heckle is a mutation tester. It modifies your code and runs your tests to make sure they fail. The idea is that if code can be changed and your tests don't notice, either that code isn't being covered or it doesn't do anything.
 
 It's like hiring a white-hat hacker to try to break into your server and making sure you detect it. You learn the most by trying to break things and watching the outcome in an act of unit test sadism.
 
-== FEATURES/PROBLEMS:
+## Features and problems
 
-* Heckles a single method or every method a class defines itself.
-* Class methods work: name them as "self.name". Both "def self.name" and
+- Heckles a single method or every method a class defines itself.
+- Class methods work: name them as "self.name". Both "def self.name" and
   defs inside "class << self" are found.
-* Private and protected methods keep their visibility while mutated.
-* Each mutant is evaluated inside the method's original module and class
+- Private and protected methods keep their visibility while mutated.
+- Each mutant is evaluated inside the method's original module and class
   nesting, so constant lookup behaves as it does in your file.
-* Classes defined by a block are heckled like any other. A constant
+- Classes defined by a block are heckled like any other. A constant
   assigned a method call with a literal block is treated as a class body
   named by that constant:
 
-      Point = Data.define(:x, :y) do ... end
-      Pair = Struct.new(:a, :b) { ... }
-      Child = Class.new(Parent) do ... end
-      Helpers = Module.new do ... end
-      A::B = Struct.new(:v) do ... end
+  ```ruby
+  Point = Data.define(:x, :y) do ... end
+  Pair = Struct.new(:a, :b) { ... }
+  Child = Class.new(Parent) do ... end
+  Helpers = Module.new do ... end
+  A::B = Struct.new(:v) do ... end
+  ```
 
   Any call counts, whatever its receiver or name. Instance methods, "def
   self.name" and "class << self" in the block all work. The mutant is
@@ -39,72 +41,78 @@ It's like hiring a white-hat hacker to try to break into your server and making 
   enclosing module first. A class or module keyword inside such a block
   defines a constant of the enclosing scope, so its methods are not
   found under the block-defined class's name.
-* With --fork, each mutant runs in a forked child process and the heckle
-  process itself never loads a mutant. See FORK MODE below.
-* Each mutant's test run is limited in time and in resident memory, and
-  --fork is the mode that can always enforce both. See TIMEOUTS AND
-  MEMORY below.
-* Tests are plain Minitest, run in-process. Other test frameworks are not
+- With --fork, each mutant runs in a forked child process and the heckle
+  process itself never loads a mutant. See [Fork mode](#fork-mode) below.
+- Each mutant's test run is limited in time and in resident memory, and
+  --fork is the mode that can always enforce both. See
+  [Timeouts and memory](#timeouts-and-memory) below.
+- Tests are plain Minitest, run in-process. Other test frameworks are not
   supported.
-* Mutation kinds (the names the -n and -x flags take):
-  * true, false: true becomes false and false becomes true.
-  * lit: integers and floats change by a random amount. Symbols, regexes
+- Mutation kinds (the names the -n and -x flags take):
+  - true, false: true becomes false and false becomes true.
+  - lit: integers and floats change by a random amount. Symbols, regexes
     without interpolation, and ranges with integer ends become random ones.
-  * str: string literals become a random string. Heredocs and parts of
+  - str: string literals become a random string. Heredocs and parts of
     interpolated strings are left alone.
-  * if: an if or unless swaps its branches. Ternaries and if/elsif chains
+  - if: an if or unless swaps its branches. Ternaries and if/elsif chains
     negate the condition instead.
-  * while, until: each becomes the other.
-  * call: a method call is replaced by nil.
-  * iter: a method call with a block is replaced by nil.
-  * lasgn, iasgn, gasgn, cvasgn: an assignment to a local, instance, global
+  - while, until: each becomes the other.
+  - call: a method call is replaced by nil.
+  - iter: a method call with a block is replaced by nil.
+  - lasgn, iasgn, gasgn, cvasgn: an assignment to a local, instance, global
     or class variable gets nil as its value (42 when the value was already
     nil). Targets of multiple assignment, for loops and "rescue => e", and
     block parameters, are renamed so the value goes nowhere.
-  * dasgn and dasgn_curr are still accepted as names for lasgn.
-* Constants, super, yield, method parameters, nil and self are not mutated.
+  - dasgn and dasgn_curr are still accepted as names for lasgn.
+- Constants, super, yield, method parameters, nil and self are not mutated.
 
-== SYNOPSIS:
+## Synopsis
 
 Run heckle_prism from the root of your project. It loads the files matching the
-test pattern (test/**/test_*.rb and test/**/*_test.rb by default) with
+test pattern (test/\*\*/test_\*.rb and test/\*\*/\*_test.rb by default) with
 lib and test on the load path, so your tests must require the code they
 test. The unmutated tests are run once first and must pass.
 
-    % heckle_prism Doubler                  # every method Doubler defines
-    % heckle_prism Doubler double           # one instance method
-    % heckle_prism Tally self.start         # one class method
-    % heckle_prism Name::Spaced::Class meth # nested names are fine
+```
+% heckle_prism Doubler                  # every method Doubler defines
+% heckle_prism Doubler double           # one instance method
+% heckle_prism Tally self.start         # one class method
+% heckle_prism Name::Spaced::Class meth # nested names are fine
+```
 
 Main options:
 
-    -t, --tests PATTERN  test files to load (a glob); repeat it to load
-                         several patterns. Any -t replaces the default
-                         patterns, and each one given must match a file
-    -n, --nodes KINDS    only these mutation kinds, comma separated
-    -x, --exclude-nodes KINDS
-                         every kind except these
-    -b, --branches       only if, while and until
-        --assignments    only the assignment kinds
-    -T, --timeout SECS   time limit per test run, a whole number of seconds;
-                         without it the limit is twice the unmutated run,
-                         at least 5 seconds
-        --memory-limit MB
-                         most resident memory a test run may use; 0 turns
-                         the limit off. See TIMEOUTS AND MEMORY below
-    -F, --force          go on even if the unmutated tests fail
-        --fork           run each mutant in a forked child process
-    -v, --verbose        show each mutant and the test output
+```
+-t, --tests PATTERN  test files to load (a glob); repeat it to load
+                     several patterns. Any -t replaces the default
+                     patterns, and each one given must match a file
+-n, --nodes KINDS    only these mutation kinds, comma separated
+-x, --exclude-nodes KINDS
+                     every kind except these
+-b, --branches       only if, while and until
+    --assignments    only the assignment kinds
+-T, --timeout SECS   time limit per test run, a whole number of seconds;
+                     without it the limit is twice the unmutated run,
+                     at least 5 seconds
+    --memory-limit MB
+                     most resident memory a test run may use; 0 turns
+                     the limit off. See Timeouts and memory below
+-F, --force          go on even if the unmutated tests fail
+    --fork           run each mutant in a forked child process
+-v, --verbose        show each mutant and the test output
+```
 
 For example, to heckle only the branches of one method against one test
 file:
 
-    % heckle_prism Doubler double -b -t test/test_doubler_with_a_number.rb
+```
+% heckle_prism Doubler double -b -t test/test_doubler_with_a_number.rb
+```
 
 Each mutant the tests did not catch is printed as a diff against the
 original method. The exit status is 0 when no mutant survived and every
 mutant was run, 1 otherwise, or 2 when heckle had to end the process
-itself (see TIMEOUTS AND MEMORY).
+itself (see [Timeouts and memory](#timeouts-and-memory)).
 
 Each mutant ends one of three ways. It is killed when the tests failed
 against it, and it survived when they passed. Otherwise it was not
@@ -113,19 +121,21 @@ in fork mode, the mutant could not be installed or had a syntax error,
 or the run was stopped with ^C. A mutant that was not judged gets a warning, followed by the
 same diff a survivor gets, so the warning says which mutant it was:
 
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !!! Your tests timed out. Heckle may have caused an infinite loop.
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+```
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! Your tests timed out. Heckle may have caused an infinite loop.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    --- original
-    +++ mutation
-     def tally
-       @notes << :tallied
-       rows = 0
-    -  (1..@entries.size).each { rows += 1 }
-    +  (1..nil).each { rows += 1 }
-       rows
-     end
+--- original
++++ mutation
+ def tally
+   @notes << :tallied
+   rows = 0
+-  (1..@entries.size).each { rows += 1 }
++  (1..nil).each { rows += 1 }
+   rows
+ end
+```
 
 The lines marked - are the original code and the lines marked + are
 what the mutant ran in their place. Here @entries.size was replaced by
@@ -142,15 +152,18 @@ number of its mutants the tests did not catch and the number heckle ran.
 When some of the method's mutants were not judged, a second line says
 how many and why:
 
-    1 of 2 mutants survived
-    1 timed out
+```
+1 of 2 mutants survived
+1 timed out
+```
 
 The reasons are "timed out", "ran out of memory" (fork mode, over the
 memory limit or out of memory in the child), "crashed" (fork mode: the
 test run raised, the child died by a signal or exited with an
 unexpected status), "failed to install" (fork mode), "had a syntax
 error", "canceled" (^C) and "not run" (in-process, after heckle could
-not clean up after an earlier mutant; see TIMEOUTS AND MEMORY). Several
+not clean up after an earlier mutant; see
+[Timeouts and memory](#timeouts-and-memory)). Several
 are listed in that order, separated by commas, as in "2 timed out, 1
 crashed".
 
@@ -158,13 +171,17 @@ A method with nothing to mutate gets the thick skin warning and no such
 lines. The Heckle Results block at the end counts methods (Passed,
 Failed and Thick Skin) and then mutants:
 
-    Mutants   :  31 killed, 4 survived
+```
+Mutants   :  31 killed, 4 survived
+```
 
 When some mutants were not judged, their counts by reason come between
 killed and survived:
 
-    Mutants   : 389 killed, 2 timed out, 81 survived
-    Mutants   : 389 killed, 1 timed out, 1 crashed, 81 survived
+```
+Mutants   : 389 killed, 2 timed out, 81 survived
+Mutants   : 389 killed, 1 timed out, 1 crashed, 81 survived
+```
 
 The figures on the line add up to the number of mutants run across all
 the methods heckled. Passed and Failed count methods, so one method with
@@ -176,7 +193,9 @@ survivor under Failed. A run with mutants not run does not print "No
 mutants survived. Cool!" for their method or "All heckling was
 thwarted!" at the end, but a line such as
 
-    2 mutants were not run. Run heckle_prism with --fork to judge them.
+```
+2 mutants were not run. Run heckle_prism with --fork to judge them.
+```
 
 HecklePrism.new takes a reporter as its fourth argument, HecklePrism::Reporter by
 default. A reporter that subclasses HecklePrism::Reporter can override any
@@ -192,30 +211,38 @@ those mutants. mutant_totals gets a third argument, a hash of counts by
 reason, when some of the method's mutants were not judged, and the same
 two arguments as before otherwise.
 
-== USING HECKLE IN A PROJECT:
+## Using heckle in a project
 
 heckle_prism is not published as a gem. Add it to the project's
 Gemfile by path:
 
-    gem "heckle_prism", path: "/path/to/heckle_prism", group: :test
+```ruby
+gem "heckle_prism", path: "/path/to/heckle_prism", group: :test
+```
 
 Run bundle install, then run heckle_prism with bundle exec from the project
 root:
 
-    % bundle exec heckle_prism Widget                # every method Widget defines
-    % bundle exec heckle_prism Widget label          # one instance method
-    % bundle exec heckle_prism Widget self.restock   # one class method
+```
+% bundle exec heckle_prism Widget                # every method Widget defines
+% bundle exec heckle_prism Widget label          # one instance method
+% bundle exec heckle_prism Widget self.restock   # one class method
+```
 
 Every mutant runs every loaded test, so the time a heckle run takes is
 the number of mutants times the time of the whole loaded suite. Use -t
 to load only the tests that cover the class:
 
-    % bundle exec heckle_prism Widget -t test/models/widget_test.rb
+```
+% bundle exec heckle_prism Widget -t test/models/widget_test.rb
+```
 
 When the tests that cover the class live in more than one file, give -t
 once per pattern:
 
-    % bundle exec heckle_prism Widget -t test/models/widget_test.rb -t 'test/jobs/widget_*_test.rb'
+```
+% bundle exec heckle_prism Widget -t test/models/widget_test.rb -t 'test/jobs/widget_*_test.rb'
+```
 
 The run time is the per-mutant cost of the loaded tests, not of the
 method being heckled. A suite whose tests each make round trips to a
@@ -236,7 +263,7 @@ mutant runs as they are in rails test. The parallelize line was removed
 from test/test_helper.rb first, and heckle has not been tried with it.
 When heckling a whole class, heckle leaves out methods whose source is
 outside the project directory, such as the ones Rails generates in a
-model (self.__class_attr___callbacks and the like); -v lists them. A
+model (self.\_\_class_attr\_\_\_callbacks and the like); -v lists them. A
 method defined inside the project without def, such as an
 attr_accessor, gets a "Skipping" line.
 
@@ -250,52 +277,54 @@ loaded.
 
 Known limits:
 
-* Only methods written with def are heckled. Methods made by
+- Only methods written with def are heckled. Methods made by
   define_method, attr_accessor, class_attribute and similar are skipped.
-* Mutants run inside the heckle process, or with --fork inside its
+- Mutants run inside the heckle process, or with --fork inside its
   child. Tests that start a new program (a system call, a spawned
   server) run the original code, not the mutant, so they cannot catch
   it.
-* A mutant can change state that outlives one test run, such as a
+- A mutant can change state that outlives one test run, such as a
   global, a class variable or a cache, and that change is seen by the
   runs of later mutants. With --fork it is not, since each mutant's
   changes end with its child process: --fork is the mode that keeps
   mutants apart from each other.
-* Equivalent mutants are reported like any other survivor. A mutant
+- Equivalent mutants are reported like any other survivor. A mutant
   that changes the code without changing what the method does cannot be
   caught by any test, and heckle cannot tell it apart from a gap in the
   tests. Two patterns seen in a real project:
-  * A guard made redundant by a later guard. In
+  - A guard made redundant by a later guard. In
 
-        return [] if text.blank?
-        return [] unless text.match?(/\d/)
+    ```ruby
+    return [] if text.blank?
+    return [] unless text.match?(/\d/)
+    ```
 
     replacing text.blank? with nil survives for any string, because
     blank text has no digit and the second line returns [] for it.
-  * A method wrapped in "rescue StandardError". A mutant of a guard
+  - A method wrapped in "rescue StandardError". A mutant of a guard
     before the rescue (its condition replaced by nil, or its if turned
     into unless) often makes later code raise. When the rescue returns
     the value the guard would have returned, the mutant survives, so
     the rescue hides the mutants of the guards ahead of it.
-* Only method bodies are mutated. Constants are not, so data held in
+- Only method bodies are mutated. Constants are not, so data held in
   constants, such as a hash of regexes or a lookup table, is never
   changed, even when the methods that use it are heckled. A survivor
   count of zero says nothing about whether the tests check that data.
 
-== TIMEOUTS AND MEMORY:
+## Timeouts and memory
 
 A mutant can make a method loop forever or allocate without end. Heckle
 limits each mutant's test run in time and in resident memory. How
 firmly it can hold those limits depends on the mode.
 
-The timeout. Each test run gets -T seconds, or without -T twice the time
+**The timeout.** Each test run gets -T seconds, or without -T twice the time
 of the unmutated run, at least 5 seconds. When it runs over, heckle
 raises HecklePrism::Timeout in it, prints the timeout warning and the
 mutant's diff, counts the mutant as timed out and goes on. HecklePrism::Timeout is an Exception, not a
 StandardError, so neither a bare rescue nor "rescue StandardError" in
 the code under test catches it, and Minitest lets it through.
 
-After a timeout. Minitest skips the teardown of a test that the timeout
+**After a timeout.** Minitest skips the teardown of a test that the timeout
 (or ^C) stopped, and leaves the workers of its parallel executor
 waiting. Before the next mutant runs, heckle puts the original method
 back, then runs that test's teardown hooks quietly, as Minitest runs
@@ -310,11 +339,13 @@ mutants in that process. It reports each later one as "Not run", with
 the reason and its diff, rather than give a verdict the earlier mutant
 may have caused. Run heckle_prism with --fork to judge them.
 
-How a timeout gets lost. Ruby's Timeout raises once and does not raise
+**How a timeout gets lost.** Ruby's Timeout raises once and does not raise
 again. The timeout, then Heckle::Timeout, used to be a StandardError. On a Rails
 application, a mutant turned
 
-    (book.first_row(sheet)..book.last_row(sheet)).map do |row|
+```ruby
+(book.first_row(sheet)..book.last_row(sheet)).map do |row|
+```
 
 into an endless range, (book.first_row(sheet)..nil), inside code that
 rescued StandardError around the call. The rescue caught the timeout,
@@ -324,7 +355,7 @@ four hours, until the system's out-of-memory killer ended the whole
 terminal session. Code that rescues Exception, or rescues and retries,
 can still swallow the timeout, which is what the watchdog is for.
 
-The watchdog. In-process, a thread of heckle's own keeps the deadline.
+**The watchdog.** In-process, a thread of heckle's own keeps the deadline.
 At the deadline it raises the timeout in the test run, and again every
 half second while the run goes on. If the run is still going two
 seconds after the first raise, the watchdog writes a report to standard
@@ -335,7 +366,7 @@ A test run that returns normally after its timeout was swallowed counts
 as timed out, never as a survivor. From the deadline to the end of the
 process took 2.1 to 2.5 seconds on Ruby 2.7.8 through 4.0.9.
 
-The memory limit. heckle prints it on the line after "Timeout set to N
+**The memory limit.** heckle prints it on the line after "Timeout set to N
 seconds.". By default it is the heckle process's resident memory after
 the unmutated run, plus the larger of 1024 MB and that amount again.
 --memory-limit MB sets it in megabytes of 1048576 bytes, and
@@ -366,25 +397,27 @@ and a long garbage collection holds it.
 
 What in-process mode cannot contain:
 
-* A mutant stuck in one C call that never gives up the global VM lock,
+- A mutant stuck in one C call that never gives up the global VM lock,
   such as a loop in a C extension or one enormous bignum computation.
   Heckle's own thread cannot run until the call returns, so neither the
   timeout nor the memory polling acts, and if the call never returns,
   heckle never ends. The RLIMIT_DATA backstop still bounds memory.
-* Threads the tests start. A timeout ends the test run in heckle's
+- Threads the tests start. A timeout ends the test run in heckle's
   thread, but such a thread keeps running until heckle exits. The
   workers of Minitest's parallelize_me! are the exception: heckle kills
   them after a timeout, and runs no more mutants when one cannot be
   killed.
-* State a mutant changes that later mutants see (see Known limits).
+- State a mutant changes that later mutants see (see Known limits).
 
 --fork contains all of these. The heckle process never runs a mutant,
 so it can always stop the child when the child runs over its time or
 memory, whatever the child is doing.
 
-== FORK MODE:
+## Fork mode
 
-    % bundle exec heckle_prism Widget --fork
+```
+% bundle exec heckle_prism Widget --fork
+```
 
 Fork mode is off unless --fork is given. Without the flag heckle runs
 as described above.
@@ -421,7 +454,7 @@ heckling heckle (below). Each mutant costs a fork on top of its test
 run. On the Rails application mentioned above, one model's 15 mutants
 took about 1.45 seconds with --fork and 1.15 seconds without.
 
-Databases. In Rails 8.1 (read in the 8.1.4.1 source), Active Record
+**Databases.** In Rails 8.1 (read in the 8.1.4.1 source), Active Record
 registers a callback with ActiveSupport::ForkTracker that discards
 every connection pool in a forked child without closing the parent's
 connections, so each child opens a connection of its own. For
@@ -433,7 +466,7 @@ no processes behind and did not touch the coverage directory.
 PostgreSQL, MySQL and other database servers have not been tried. With
 one, each mutant opens a new connection to the server.
 
-Heckling heckle. In the child, the code that decides whether the tests
+**Heckling heckle.** In the child, the code that decides whether the tests
 passed runs after the mutant is loaded. So when heckle heckles its own
 methods, a mutant of a method on that path judges itself, and its
 result says nothing. Those methods are HecklePrism#tests_pass?,
@@ -443,26 +476,26 @@ as unknown. The other methods are judged by
 unmutated code: install is already running when its mutant replaces
 it, and the outcome is read in the parent.
 
-== REQUIREMENTS:
+## Requirements
 
-* Ruby 3.4 or later. The test suite passes on 3.4.2, 3.4.12, 4.0.0 and
+- Ruby 3.4 or later. The test suite passes on 3.4.2, 3.4.12, 4.0.0 and
   4.0.9. For Ruby 2.7 to 3.3, use heckle 3.
-* prism 2.0.0 or later. 2.0.0 and 2.1.0 pass the test suite on each of
+- prism 2.0.0 or later. 2.0.0 and 2.1.0 pass the test suite on each of
   those Rubies. Ruby 3.4 and 4.0 come with prism 1, so prism 2 is
   installed as a gem. prism 2.0 and 2.1 do not install on Ruby 4.1.
-* minitest 6.1.0 or later. minitest 6.0 requires prism 1, and
+- minitest 6.1.0 or later. minitest 6.0 requires prism 1, and
   minitest 5 is not supported.
-* diff(1) on the PATH, which prints each surviving mutant against the
+- diff(1) on the PATH, which prints each surviving mutant against the
   original method
 
 ruby2ruby, ParseTree and ruby_parser are no longer used.
 
-== INSTALL:
+## Install
 
-* Add the Gemfile line under USING HECKLE IN A PROJECT, or run
-  bin/heckle_prism from a checkout.
+- Add the Gemfile line under [Using heckle in a project](#using-heckle-in-a-project),
+  or run bin/heckle_prism from a checkout.
 
-== LICENSE:
+## License
 
 (The MIT License)
 

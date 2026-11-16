@@ -27,7 +27,8 @@ class TestGemspec < Minitest::Test
     assert_includes spec.files, "bin/heckle_prism"
     assert_includes spec.files, "lib/heckle_prism.rb"
     assert_includes spec.files, "lib/heckle_prism/version.rb"
-    assert_includes spec.files, "README.txt"
+    assert_includes spec.files, "README.md"
+    assert_includes spec.files, "CHANGELOG.md"
     assert_empty spec.files.grep(%r{\Atest/})
     assert_equal ["heckle_prism"], spec.executables
   end
