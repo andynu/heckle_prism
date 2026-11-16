@@ -388,37 +388,36 @@ class HecklePrism
   # Returns a random nonzero Integer from -100 to 100.
 
   def rand_number
-    (rand(100) + 1)*((-1)**rand(2))
+    magnitude = rand(100) + 1
+    rand(2).zero? ? magnitude : -magnitude
   end
+
+  # Characters drawn for rand_string and rand_symbol.
+  PRINTABLE = (" ".."~").to_a.freeze
+  LETTERS = [*"a".."z", *"A".."Z"].freeze
 
   ##
   # Returns a random String of 0 to 49 printable ASCII characters (space
   # through tilde), so survivor diffs stay readable.
 
   def rand_string
-    size = rand(50)
-    str = +""
-    size.times { str << (32 + rand(95)).chr }
-    str
+    Array.new(rand(50)) { pick(PRINTABLE) }.join
   end
 
   ##
-  # Returns a random Symbol
+  # Returns a Symbol of 1 to 50 random ASCII letters.
 
   def rand_symbol
-    letters = ('a'..'z').to_a + ('A'..'Z').to_a
-    str = +""
-    (rand(50) + 1).times { str << letters[rand(letters.size)] }
-    :"#{str}"
+    Array.new(rand(50) + 1) { pick(LETTERS) }.join.to_sym
   end
 
   ##
-  # Returns a random Range
+  # Returns an inclusive Range starting from 0 to 49 and spanning 0 to 49
+  # more.
 
   def rand_range
-    min = rand(50)
-    max = min + rand(50)
-    min..max
+    first = rand(50)
+    first..(first + rand(50))
   end
 
   ##
@@ -540,6 +539,10 @@ class HecklePrism
   # replacements for each method heckled after one.
   def rand(max)
     (@random ||= Random.new).rand(max)
+  end
+
+  def pick(choices)
+    choices[rand(choices.size)]
   end
 
   # Once the timeout has fired the outcome says nothing, even if the code
