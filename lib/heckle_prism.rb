@@ -11,7 +11,9 @@ require "heckle_prism/watchdog"
 require "heckle_prism/settling"
 
 ##
-# Test Unit Sadism
+# Mutation tester for Minitest suites. Changes one method one site at a
+# time, runs the tests against each mutant and reports the mutants the
+# tests still pass.
 
 class HecklePrism
 
@@ -36,7 +38,7 @@ class HecklePrism
   NODE_ALIASES = { dasgn: :lasgn, dasgn_curr: :lasgn }.freeze
 
   ##
-  # Branch node types.
+  # The kinds that turn a condition or loop around; -b selects them.
 
   BRANCH_NODES = [:if, :until, :while].freeze
 
@@ -60,17 +62,17 @@ class HecklePrism
   }.freeze
 
   ##
-  # diff(1) executable
+  # The program Reporter#diff runs, found on the PATH.
 
   DIFF = "diff"
 
   ##
-  # Mutation count
+  # Mutants run by the last validate.
 
   attr_reader :count
 
   ##
-  # Mutations that caused failures
+  # Source of each mutant the tests passed against in the last validate.
 
   attr_accessor :failures
 
@@ -84,19 +86,10 @@ class HecklePrism
   end
 
   ##
-  # Class being heckled
+  # The class or module, its name as given, and the method name, with a
+  # "self." prefix for a class method.
 
-  attr_reader :klass
-
-  ##
-  # Name of class being heckled
-
-  attr_reader :klass_name
-
-  ##
-  # Name of method being heckled
-
-  attr_reader :method_name
+  attr_reader :klass, :klass_name, :method_name
 
   # Settings shared by every heckle in the process; the runner sets them
   # from the command line. The 60 second timeout stands only until timeout=
