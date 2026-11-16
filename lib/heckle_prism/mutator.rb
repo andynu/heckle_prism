@@ -203,7 +203,7 @@ class HecklePrism
     # `|(a, b)|` are not directly in the list and are not renamed.
     def visit_parameters_node(node)
       (node.requireds + node.posts).grep(Prism::RequiredParameterNode).each do |param|
-        replace(:lasgn, param.location, "_heckle_dummy")
+        replace(:lasgn, param.location, "_heckled")
       end
       super
     end
@@ -279,10 +279,10 @@ class HecklePrism
     end
 
     TARGETS = {
-      Prism::LocalVariableTargetNode => [:lasgn, "_heckle_dummy"],
-      Prism::InstanceVariableTargetNode => [:iasgn, "@_heckle_dummy"],
-      Prism::GlobalVariableTargetNode => [:gasgn, "$_heckle_dummy"],
-      Prism::ClassVariableTargetNode => [:cvasgn, "@@_heckle_dummy"],
+      Prism::LocalVariableTargetNode => [:lasgn, "_heckled"],
+      Prism::InstanceVariableTargetNode => [:iasgn, "@_heckled"],
+      Prism::GlobalVariableTargetNode => [:gasgn, "$_heckled"],
+      Prism::ClassVariableTargetNode => [:cvasgn, "@@_heckled"],
     }.freeze
 
     # Attribute, index and constant targets are not renamed.

@@ -1051,19 +1051,19 @@ class TestMutator < Minitest::Test
     expected = [
       <<~RUBY,
         def multiple_assignment
-          @_heckle_dummy, $mid, high = 1, 2, 3
+          @_heckled, $mid, high = 1, 2, 3
           high
         end
       RUBY
       <<~RUBY,
         def multiple_assignment
-          @low, $_heckle_dummy, high = 1, 2, 3
+          @low, $_heckled, high = 1, 2, 3
           high
         end
       RUBY
       <<~RUBY,
         def multiple_assignment
-          @low, $mid, _heckle_dummy = 1, 2, 3
+          @low, $mid, _heckled = 1, 2, 3
           high
         end
       RUBY
@@ -1083,7 +1083,7 @@ class TestMutator < Minitest::Test
       <<~RUBY,
         def iterates
           doses = [4, 5, 6]
-          doses.map { |_heckle_dummy| dose }
+          doses.map { |_heckled| dose }
         end
       RUBY
     ]
@@ -1097,7 +1097,7 @@ class TestMutator < Minitest::Test
     expected = [
       <<~RUBY,
         def block_assignment
-          tray.each do |_heckle_dummy|
+          tray.each do |_heckled|
             count = slot
             count = nil
             count
@@ -1128,53 +1128,53 @@ class TestMutator < Minitest::Test
   end
 
   def test_class_variable_target
-    assert_mutants ["def m(l)\n  @@_heckle_dummy, b = l\nend\n"],
+    assert_mutants ["def m(l)\n  @@_heckled, b = l\nend\n"],
                    inline_mutants("def m(l)\n  @@a, b = l\nend\n", :cvasgn)
   end
 
   def test_splat_target
-    assert_mutants ["def m(l)\n  _heckle_dummy, *b = l\nend\n",
-                    "def m(l)\n  a, *_heckle_dummy = l\nend\n"],
+    assert_mutants ["def m(l)\n  _heckled, *b = l\nend\n",
+                    "def m(l)\n  a, *_heckled = l\nend\n"],
                    inline_mutants("def m(l)\n  a, *b = l\nend\n", :lasgn)
   end
 
   def test_nested_target
-    assert_mutants ["def m(l)\n  _heckle_dummy, (b, c) = l\nend\n",
-                    "def m(l)\n  a, (_heckle_dummy, c) = l\nend\n",
-                    "def m(l)\n  a, (b, _heckle_dummy) = l\nend\n"],
+    assert_mutants ["def m(l)\n  _heckled, (b, c) = l\nend\n",
+                    "def m(l)\n  a, (_heckled, c) = l\nend\n",
+                    "def m(l)\n  a, (b, _heckled) = l\nend\n"],
                    inline_mutants("def m(l)\n  a, (b, c) = l\nend\n", :lasgn)
   end
 
   def test_for_target
     source = "def m(l)\n  for x in l\n    x\n  end\n  for a, @b in l\n  end\nend\n"
 
-    assert_mutants ["def m(l)\n  for _heckle_dummy in l\n    x\n  end\n  for a, @b in l\n  end\nend\n",
-                    "def m(l)\n  for x in l\n    x\n  end\n  for _heckle_dummy, @b in l\n  end\nend\n",
-                    "def m(l)\n  for x in l\n    x\n  end\n  for a, @_heckle_dummy in l\n  end\nend\n"],
+    assert_mutants ["def m(l)\n  for _heckled in l\n    x\n  end\n  for a, @b in l\n  end\nend\n",
+                    "def m(l)\n  for x in l\n    x\n  end\n  for _heckled, @b in l\n  end\nend\n",
+                    "def m(l)\n  for x in l\n    x\n  end\n  for a, @_heckled in l\n  end\nend\n"],
                    inline_mutants(source, ASGN_KINDS)
   end
 
   def test_rescue_target
     source = "def m\n  begin\n    foo\n  rescue => e\n    e\n  end\nend\n"
 
-    assert_mutants ["def m\n  begin\n    foo\n  rescue => _heckle_dummy\n    e\n  end\nend\n"],
+    assert_mutants ["def m\n  begin\n    foo\n  rescue => _heckled\n    e\n  end\nend\n"],
                    inline_mutants(source, :lasgn)
   end
 
   def test_lambda_parameter
-    assert_mutants ["def m\n  ->(_heckle_dummy) { a }\nend\n"],
+    assert_mutants ["def m\n  ->(_heckled) { a }\nend\n"],
                    inline_mutants("def m\n  ->(a) { a }\nend\n", :lasgn)
   end
 
   # Only parameters directly in the list are renamed; the parts of a
   # destructuring parameter are not.
   def test_destructuring_block_parameter_is_not_renamed
-    assert_mutants ["def m\n  f { |(a, b), _heckle_dummy| }\nend\n"],
+    assert_mutants ["def m\n  f { |(a, b), _heckled| }\nend\n"],
                    inline_mutants("def m\n  f { |(a, b), c| }\nend\n", :lasgn)
   end
 
   def test_required_parameter_after_rest_is_renamed
-    assert_mutants ["def m\n  f { |*r, _heckle_dummy| }\nend\n"],
+    assert_mutants ["def m\n  f { |*r, _heckled| }\nend\n"],
                    inline_mutants("def m\n  f { |*r, z| }\nend\n", :lasgn)
   end
 
