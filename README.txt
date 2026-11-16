@@ -1,4 +1,8 @@
-= heckle
+= heckle_prism
+
+heckle_prism is heckle rebuilt on Prism. It was called heckle up to
+version 3. Below, "heckle" in prose means this program; the command,
+the gem and the classes are named heckle_prism and HecklePrism.
 
 home :: http://ruby.sadi.st/Heckle.html
 code :: https://github.com/seattlerb/heckle
@@ -62,15 +66,15 @@ It's like hiring a white-hat hacker to try to break into your server and making 
 
 == SYNOPSIS:
 
-Run heckle from the root of your project. It loads the files matching the
+Run heckle_prism from the root of your project. It loads the files matching the
 test pattern (test/**/test_*.rb and test/**/*_test.rb by default) with
 lib and test on the load path, so your tests must require the code they
 test. The unmutated tests are run once first and must pass.
 
-    % heckle Doubler                  # every method Doubler defines
-    % heckle Doubler double           # one instance method
-    % heckle Tally self.start         # one class method
-    % heckle Name::Spaced::Class meth # nested names are fine
+    % heckle_prism Doubler                  # every method Doubler defines
+    % heckle_prism Doubler double           # one instance method
+    % heckle_prism Tally self.start         # one class method
+    % heckle_prism Name::Spaced::Class meth # nested names are fine
 
 Main options:
 
@@ -95,7 +99,7 @@ Main options:
 For example, to heckle only the branches of one method against one test
 file:
 
-    % heckle Doubler double -b -t test/test_doubler_with_a_number.rb
+    % heckle_prism Doubler double -b -t test/test_doubler_with_a_number.rb
 
 Each mutant the tests did not catch is printed as a diff against the
 original method. The exit status is 0 when no mutant survived and every
@@ -172,17 +176,17 @@ survivor under Failed. A run with mutants not run does not print "No
 mutants survived. Cool!" for their method or "All heckling was
 thwarted!" at the end, but a line such as
 
-    2 mutants were not run. Run heckle with --fork to judge them.
+    2 mutants were not run. Run heckle_prism with --fork to judge them.
 
-Heckle.new takes a reporter as its fourth argument, Heckle::Reporter by
-default. A reporter that subclasses Heckle::Reporter can override any
+HecklePrism.new takes a reporter as its fourth argument, HecklePrism::Reporter by
+default. A reporter that subclasses HecklePrism::Reporter can override any
 of its methods. One that does not must define every method validate
 calls: no_mutations, method_loaded, remaining_mutations, replacing,
 report_test_failures, no_failures, failure, no_surviving_mutants,
 mutant_totals and not_judged. Two of these differ from heckle 3.0.0.
 not_judged(reason, message, original, mutant) is new: it gets each
 mutant that was not judged, with its reason (a key of
-Heckle::NOT_JUDGED), the warning text and the dedented original and
+HecklePrism::NOT_JUDGED), the warning text and the dedented original and
 mutant sources, and it replaces the warning calls validate made for
 those mutants. mutant_totals gets a third argument, a hash of counts by
 reason, when some of the method's mutants were not judged, and the same
@@ -190,28 +194,28 @@ two arguments as before otherwise.
 
 == USING HECKLE IN A PROJECT:
 
-This version of heckle is not published as a gem. Add it to the
-project's Gemfile by path:
+heckle_prism is not published as a gem. Add it to the project's
+Gemfile by path:
 
-    gem "heckle", path: "/path/to/heckle", group: :test
+    gem "heckle_prism", path: "/path/to/heckle_prism", group: :test
 
-Run bundle install, then run heckle with bundle exec from the project
+Run bundle install, then run heckle_prism with bundle exec from the project
 root:
 
-    % bundle exec heckle Widget                # every method Widget defines
-    % bundle exec heckle Widget label          # one instance method
-    % bundle exec heckle Widget self.restock   # one class method
+    % bundle exec heckle_prism Widget                # every method Widget defines
+    % bundle exec heckle_prism Widget label          # one instance method
+    % bundle exec heckle_prism Widget self.restock   # one class method
 
 Every mutant runs every loaded test, so the time a heckle run takes is
 the number of mutants times the time of the whole loaded suite. Use -t
 to load only the tests that cover the class:
 
-    % bundle exec heckle Widget -t test/models/widget_test.rb
+    % bundle exec heckle_prism Widget -t test/models/widget_test.rb
 
 When the tests that cover the class live in more than one file, give -t
 once per pattern:
 
-    % bundle exec heckle Widget -t test/models/widget_test.rb -t 'test/jobs/widget_*_test.rb'
+    % bundle exec heckle_prism Widget -t test/models/widget_test.rb -t 'test/jobs/widget_*_test.rb'
 
 The run time is the per-mutant cost of the loaded tests, not of the
 method being heckled. A suite whose tests each make round trips to a
@@ -286,8 +290,8 @@ firmly it can hold those limits depends on the mode.
 
 The timeout. Each test run gets -T seconds, or without -T twice the time
 of the unmutated run, at least 5 seconds. When it runs over, heckle
-raises Heckle::Timeout in it, prints the timeout warning and the
-mutant's diff, counts the mutant as timed out and goes on. Heckle::Timeout is an Exception, not a
+raises HecklePrism::Timeout in it, prints the timeout warning and the
+mutant's diff, counts the mutant as timed out and goes on. HecklePrism::Timeout is an Exception, not a
 StandardError, so neither a bare rescue nor "rescue StandardError" in
 the code under test catches it, and Minitest lets it through.
 
@@ -304,10 +308,10 @@ does not finish within the timeout, and a worker that Thread#kill does
 not stop (one in a long C call, say). After either, heckle runs no more
 mutants in that process. It reports each later one as "Not run", with
 the reason and its diff, rather than give a verdict the earlier mutant
-may have caused. Run heckle with --fork to judge them.
+may have caused. Run heckle_prism with --fork to judge them.
 
 How a timeout gets lost. Ruby's Timeout raises once and does not raise
-again. Heckle::Timeout used to be a StandardError. On a Rails
+again. The timeout, then Heckle::Timeout, used to be a StandardError. On a Rails
 application, a mutant turned
 
     (book.first_row(sheet)..book.last_row(sheet)).map do |row|
@@ -380,7 +384,7 @@ memory, whatever the child is doing.
 
 == FORK MODE:
 
-    % bundle exec heckle Widget --fork
+    % bundle exec heckle_prism Widget --fork
 
 Fork mode is off unless --fork is given. Without the flag heckle runs
 as described above.
@@ -432,8 +436,8 @@ one, each mutant opens a new connection to the server.
 Heckling heckle. In the child, the code that decides whether the tests
 passed runs after the mutant is loaded. So when heckle heckles its own
 methods, a mutant of a method on that path judges itself, and its
-result says nothing. Those methods are Heckle#tests_pass?,
-Heckle.tests_pass? and Heckle.quietly, and any tests_pass? a subclass
+result says nothing. Those methods are HecklePrism#tests_pass?,
+HecklePrism.tests_pass? and HecklePrism.quietly, and any tests_pass? a subclass
 defines. Their mutants still run; treat what heckle reports for them
 as unknown. The other methods are judged by
 unmutated code: install is already running when its mutant replaces
@@ -456,7 +460,7 @@ ruby2ruby, ParseTree and ruby_parser are no longer used.
 == INSTALL:
 
 * Add the Gemfile line under USING HECKLE IN A PROJECT, or run
-  bin/heckle from a checkout.
+  bin/heckle_prism from a checkout.
 
 == LICENSE:
 
