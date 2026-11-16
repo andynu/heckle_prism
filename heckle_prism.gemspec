@@ -16,10 +16,9 @@ Gem::Specification.new do |spec|
 
   spec.summary = "A mutation tester for Minitest, built on Prism."
   spec.description = <<~TEXT.tr("\n", " ").strip
-    heckle_prism is a mutation tester. It modifies your code and runs your
-    tests to make sure they fail. If code can be changed and your tests don't
-    notice, either that code isn't being covered or it doesn't do anything.
-    It began as a fork of heckle by Ryan Davis and Kevin Clark and was
+    heckle_prism changes one method at a time in small ways and runs your
+    Minitest tests against each changed version. Each version the tests
+    still pass on marks code they do not check. It began as a fork of heckle by Ryan Davis and Kevin Clark and was
     rewritten on Prism by Claude (Fable 5.2) under the direction of Andy
     Nutter-Upham. The original authors were not involved in the rewrite.
   TEXT
