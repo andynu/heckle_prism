@@ -1,5 +1,5 @@
-require 'optparse'
-require 'heckle_prism'
+require "optparse"
+require "heckle_prism"
 
 class HecklePrismRunner
   ##
@@ -13,13 +13,12 @@ class HecklePrismRunner
   # every mutant was run.
   # Aborts with a one-line message on a usage error.
 
-  def self.run argv=ARGV
-    options = parse_args argv
+  def self.run(argv = ARGV)
+    options = parse_args(argv)
+    class_name, method_name = argv
+    abort "Usage: #{File.basename $0} class_name [method_name]" unless class_name
 
-    class_or_module, method = argv.shift, argv.shift
-    abort "Usage: #{File.basename $0} class_name [method_name]" unless class_or_module
-
-    new(class_or_module, method, options).run
+    new(class_name, method_name, options).run
   rescue OptionParser::ParseError, Error, HecklePrism::SourceNotFound => e
     abort e.message
   end
@@ -29,97 +28,84 @@ class HecklePrismRunner
 
   DEFAULT_TEST_PATTERNS = %w[test/**/test_*.rb test/**/*_test.rb].freeze
 
-  def self.parse_args argv
-    options = {
-      :force => false,
-      :nodes => HecklePrism::MUTATABLE_NODES,
-      :debug => false,
-      :timeout => nil,
-      :test_pattern => DEFAULT_TEST_PATTERNS,
-    }
+  ##
+  # Removes the options from +argv+, leaving the class and method names,
+  # sets HecklePrism's run-wide settings from them and returns the rest
+  # as a Hash.
 
+  def self.parse_args(argv)
+    options = { force: false, nodes: HecklePrism::MUTATABLE_NODES, debug: false,
+                timeout: nil, test_pattern: DEFAULT_TEST_PATTERNS }
     tests = []
+    announce = ->(text) { HecklePrism::Reporter.new.warning(text) }
 
-    OptionParser.new do |opts|
-      opts.version = HecklePrism::VERSION
-      opts.program_name = File.basename $0
-      opts.banner = "Usage: #{opts.program_name} class_name [method_name]"
-      opts.on("-v", "--verbose", "Loudly explain heckle run") do
-        options[:debug] = true
-      end
+    parser = OptionParser.new
+    parser.version = HecklePrism::VERSION
+    parser.banner = "Usage: #{parser.program_name} [options] class_name [method_name]\n\n" \
+                    "Mutates the method, or every method the class defines, and reports\n" \
+                    "each mutant the tests still pass.\n\n"
 
-      opts.on("-t", "--tests TEST_PATTERN",
-              "Location of tests (glob)",
+    parser.on("-v", "--verbose", "Show each mutant and the test output") { options[:debug] = true }
+
+    parser.on("-t", "--tests TEST_PATTERN",
+              "Glob of test files to load",
               "Repeat to load more; any -t replaces the default",
-              "default: #{DEFAULT_TEST_PATTERNS.join(' and ')}") do |pattern|
-        tests << pattern
-      end
+              "default: #{DEFAULT_TEST_PATTERNS.join(' and ')}") { |pattern| tests << pattern }
 
-      opts.on("-F", "--force", "Ignore initial test failures") do
-        options[:force] = true
-      end
+    parser.on("-F", "--force", "Heckle even when the unmutated tests fail") { options[:force] = true }
 
-      opts.on(      "--assignments", "Only mutate assignments") do
-        puts "!"*70
-        puts "!!! Heckling assignments only"
-        puts "!"*70
-        puts
+    parser.on("--assignments", "Mutate only #{HecklePrism::ASGN_NODES.join(', ')}") do
+      announce.("Heckling assignments only")
+      options[:nodes] = HecklePrism::ASGN_NODES
+    end
 
-        options[:nodes] = HecklePrism::ASGN_NODES
-      end
+    parser.on("-b", "--branches", "Mutate only #{HecklePrism::BRANCH_NODES.join(', ')}") do
+      announce.("Heckling branches only")
+      options[:nodes] = HecklePrism::BRANCH_NODES
+    end
 
-      opts.on("-b", "--branches", "Only mutate branches") do
-        puts "!"*70
-        puts "!!! Heckling branches only"
-        puts "!"*70
-        puts
+    parser.on("-T", "--timeout SECONDS", Integer, "Seconds a test run may take before its mutant",
+              "is stopped and counted as timed out; default:",
+              "twice the unmutated run, at least 5") do |seconds|
+      raise OptionParser::InvalidArgument, seconds.to_s if seconds < 1
 
-        options[:nodes] = HecklePrism::BRANCH_NODES
-      end
+      puts "Setting timeout at #{seconds} seconds."
+      options[:timeout] = seconds
+    end
 
-      opts.on("-T", "--timeout SECONDS", Integer, "The maximum time for a test run in seconds",
-                                                  "Used to catch infinite loops") do |timeout|
-        raise OptionParser::InvalidArgument, timeout.to_s if timeout < 1
-
-        puts "Setting timeout at #{timeout} seconds."
-        options[:timeout] = timeout
-      end
-
-      opts.on("--memory-limit MB", Integer, "Most resident memory a test run may use",
+    parser.on("--memory-limit MB", Integer, "Most resident memory a test run may use",
               "0 turns the limit off; default: the memory used",
               "after the unmutated run plus the larger of",
               "1024 MB and that amount again") do |megabytes|
-        raise OptionParser::InvalidArgument, megabytes.to_s if megabytes < 0
+      raise OptionParser::InvalidArgument, megabytes.to_s if megabytes < 0
 
-        options[:memory_limit] = megabytes
-      end
+      options[:memory_limit] = megabytes
+    end
 
-      opts.on("--fork", "Run each mutant in a forked child",
+    parser.on("--fork", "Run each mutant in a forked child",
               "The heckle process never loads a mutant") do
-        unless Process.respond_to?(:fork)
-          raise Error, "--fork needs Process.fork, which this Ruby does not have"
-        end
-
-        options[:fork] = true
+      unless Process.respond_to?(:fork)
+        raise Error, "--fork needs Process.fork, which this Ruby does not have"
       end
 
-      opts.on("-n", "--nodes NODES", "Nodes to mutate",
-              "Possible values: #{HecklePrism::MUTATABLE_NODES.join(',')}") do |opt|
-        nodes = opt.split(',').collect {|n| n.to_sym }
-        options[:nodes] = nodes
-        puts "Mutating nodes: #{nodes.inspect}"
-      end
+      options[:fork] = true
+    end
 
-      opts.on("-x", "--exclude-nodes NODES", "Nodes to exclude") do |opt|
-        exclusions = opt.split(',').collect {|n| n.to_sym }
-        options[:nodes] = canonical(options[:nodes]) - canonical(exclusions)
-        puts "Mutating without nodes: #{exclusions.inspect}"
-      end
-    end.parse! argv
+    parser.on("-n", "--nodes NODES", Array, "Comma-separated mutation kinds to apply, from",
+              HecklePrism::MUTATABLE_NODES.join(",")) do |names|
+      options[:nodes] = names.map(&:to_sym)
+      puts "Mutating nodes: #{options[:nodes]}"
+    end
 
+    parser.on("-x", "--exclude-nodes NODES", Array, "Comma-separated mutation kinds to leave out") do |names|
+      left_out = names.map(&:to_sym)
+      options[:nodes] = canonical(options[:nodes]) - canonical(left_out)
+      puts "Mutating without nodes: #{left_out}"
+    end
+
+    parser.parse!(argv)
     options[:test_pattern] = tests unless tests.empty?
-
-    p options if options[:debug]
+    puts options.inspect if options[:debug]
 
     HecklePrism.debug = options[:debug]
     HecklePrism.timeout = options[:timeout] if options[:timeout]
@@ -155,9 +141,9 @@ class HecklePrismRunner
     nodes.map { |node| HecklePrism::NODE_ALIASES.fetch(node, node) }
   end
 
-  def initialize class_or_module, method, options={}
-    @class_or_module = class_or_module
-    @method = method
+  def initialize(class_name, method_name = nil, options = {})
+    @class_name = class_name
+    @method_name = method_name
     @options = options
   end
 
@@ -235,7 +221,7 @@ class HecklePrismRunner
 
   def build_hecklers
     klass = resolve_class
-    return [heckler(@method)] if @method
+    return [heckler(@method_name)] if @method_name
 
     method_names(klass).filter_map do |name|
       next unless in_project?(klass, name)
@@ -255,7 +241,7 @@ class HecklePrismRunner
 
     if HecklePrism.debug
       where = file ? "defined outside the project, at #{file}:#{line}" : "no source location"
-      puts "Skipping #{@class_or_module}##{name}: #{where}"
+      puts "Skipping #{@class_name}##{name}: #{where}"
     end
     false
   end
@@ -269,7 +255,7 @@ class HecklePrismRunner
   end
 
   def heckler name
-    HecklePrism.new(@class_or_module, name, @options[:nodes])
+    HecklePrism.new(@class_name, name, @options[:nodes])
   end
 
   # Every method the class defines itself, whatever its visibility.
@@ -281,12 +267,12 @@ class HecklePrismRunner
   end
 
   def resolve_class
-    klass = @class_or_module.split("::").inject(Object) { |scope, name| scope.const_get(name, false) }
+    klass = @class_name.split("::").inject(Object) { |scope, name| scope.const_get(name, false) }
     raise NameError unless klass.is_a?(Module)
 
     klass
   rescue NameError
-    raise Error, "Unknown class: #{@class_or_module}"
+    raise Error, "Unknown class: #{@class_name}"
   end
 
   # Without -T the timeout is twice the unmutated run, at least 5 seconds.

@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
-$LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
+# This checkout's lib, for running without Bundler or an installed gem.
+$LOAD_PATH << File.expand_path("../lib", __dir__)
 
 # The project being heckled, run from its root.
 %w[test lib].each do |dir|
