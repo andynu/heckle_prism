@@ -6,7 +6,7 @@ require "rbconfig"
 # A project whose test_helper starts SimpleCov. Its coverage directory is
 # committed with one marker file, and a heckle run must leave it untouched.
 class TestSimpleCovProject < Minitest::Test
-  BIN = File.expand_path("../bin/heckle", __dir__)
+  BIN = File.expand_path("../bin/heckle_prism", __dir__)
   PROJECT = File.expand_path("fixtures/simplecov_project", __dir__)
   COVERAGE = File.join(PROJECT, "coverage")
 

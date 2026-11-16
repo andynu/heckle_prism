@@ -23,7 +23,7 @@ class TestConsumerProject < Minitest::Test
   end
 
   def test_heckles_the_whole_class
-    out, err, status = bundle_exec("heckle", "Thermometer")
+    out, err, status = bundle_exec("heckle_prism", "Thermometer")
 
     assert_equal "", err
     loaded = out.scan(/^\*\*\*  (Thermometer#\S+) loaded/).flatten
@@ -38,7 +38,7 @@ class TestConsumerProject < Minitest::Test
   # escaping into it into exit status 0.
   def test_closed_stdout_ends_non_zero_with_methods_restored
     env = { "BUNDLE_GEMFILE" => File.join(PROJECT, "Gemfile") }
-    args = [RbConfig.ruby, bundle_path, "exec", "heckle", "Thermometer",
+    args = [RbConfig.ruby, bundle_path, "exec", "heckle_prism", "Thermometer",
             "-v", "-t", "pipe/thermometer_pipe_test.rb"]
     run = lambda do
       Open3.popen3(env, *args, chdir: PROJECT) do |stdin, stdout, stderr, thread|

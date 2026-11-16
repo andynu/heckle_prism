@@ -77,10 +77,10 @@ class HecklePrism
 
   def self.teardown_swallowed_report(test)
     <<~TEXT
-      heckle: the teardown of #{test.class}##{test.name}, which heckle ran after its test was stopped,
+      heckle_prism: the teardown of #{test.class}##{test.name}, which heckle ran after its test was stopped,
       was still running #{Watchdog::GRACE} seconds after the #{@@timeout} second timeout was raised in it.
       Heckle ended the process without printing results or running at_exit handlers.
-      Run heckle with --fork to run each mutant's tests in a process of their own.
+      Run heckle_prism with --fork to run each mutant's tests in a process of their own.
     TEXT
   end
   private_class_method :teardown_swallowed_report

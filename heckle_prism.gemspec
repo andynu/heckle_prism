@@ -1,7 +1,7 @@
 require_relative "lib/heckle_prism/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "heckle"
+  spec.name = "heckle_prism"
   spec.version = HecklePrism::VERSION
   spec.authors = ["Ryan Davis", "Pete Higgins"]
   spec.license = "MIT"
@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
     `git ls-files -z lib bin README.txt History.txt`.split("\x0")
   end
   spec.bindir = "bin"
-  spec.executables = ["heckle"]
+  spec.executables = ["heckle_prism"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "prism", ">= 2.0.0"

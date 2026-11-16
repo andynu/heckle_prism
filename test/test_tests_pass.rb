@@ -269,7 +269,7 @@ class TestTestsPass < Minitest::Test
     refute run.killed, run.out
     assert_equal "stopped\n", run.out
     assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
-    assert run.err.start_with?("heckle: the teardown of StuckTeardownTest#test_spin, which heckle ran after " \
+    assert run.err.start_with?("heckle_prism: the teardown of StuckTeardownTest#test_spin, which heckle ran after " \
                                "its test was stopped,\nwas still running 2 seconds after the 1 second timeout"), run.err
     assert_includes run.err, "--fork"
   end

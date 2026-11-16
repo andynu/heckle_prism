@@ -345,7 +345,7 @@ class HecklePrism
           run_forked mutation
         elsif HecklePrism.unsettled
           report_not_judged :unsettled, "Not run: #{HecklePrism.unsettled}. Heckle cannot judge a mutant in " \
-                                        "this process any more; run heckle with --fork to judge it."
+                                        "this process any more; run heckle_prism with --fork to judge it."
         else
           reports = [swallowed_timeout_report, memory_report]
           install mutation
@@ -556,12 +556,12 @@ class HecklePrism
   # while the mutant runs without calling code the mutant may replace.
   def swallowed_timeout_report
     <<~TEXT
-      heckle: #{klass_name}##{method_name}: the tests were still running #{Watchdog::GRACE} seconds
+      heckle_prism: #{klass_name}##{method_name}: the tests were still running #{Watchdog::GRACE} seconds
       after the #{@@timeout} second timeout was raised in them. The code under test
       swallowed the timeout, with a rescue of Exception or a retry, say.
       #{ended_the_process}
       #{plain_diff(dedent(original_source), dedent(@current_mutant))}
-      Run heckle with --fork to contain a mutant like this one: each mutant
+      Run heckle_prism with --fork to contain a mutant like this one: each mutant
       then runs in a child process, which heckle kills when it runs over.
     TEXT
   end
@@ -569,11 +569,11 @@ class HecklePrism
   # Called with the resident memory in bytes, or nil when an allocation
   # failed at the backstop.
   def memory_report
-    head = "heckle: #{klass_name}##{method_name}: the tests went over the memory limit of #{megabytes(@@memory_limit)}"
+    head = "heckle_prism: #{klass_name}##{method_name}: the tests went over the memory limit of #{megabytes(@@memory_limit)}"
     tail = <<~TEXT
       #{ended_the_process}
       #{plain_diff(dedent(original_source), dedent(@current_mutant))}
-      Run heckle with --fork to contain a mutant like this one: each mutant
+      Run heckle_prism with --fork to contain a mutant like this one: each mutant
       then runs in a child process, which heckle kills when it goes over
       the limit. --memory-limit MB sets the limit, and 0 turns it off.
     TEXT

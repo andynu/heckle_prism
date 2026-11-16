@@ -3,7 +3,7 @@ require 'heckle_prism'
 
 class HecklePrismRunner
   ##
-  # Raised for a usage problem; bin/heckle reports its message without a
+  # Raised for a usage problem; bin/heckle_prism reports its message without a
   # backtrace.
 
   class Error < StandardError; end
@@ -145,9 +145,9 @@ class HecklePrismRunner
 
   def self.not_run_line count
     if count == 1
-      "1 mutant was not run. Run heckle with --fork to judge it."
+      "1 mutant was not run. Run heckle_prism with --fork to judge it."
     else
-      "#{count} mutants were not run. Run heckle with --fork to judge them."
+      "#{count} mutants were not run. Run heckle_prism with --fork to judge them."
     end
   end
 
@@ -295,7 +295,7 @@ class HecklePrismRunner
     passed = HecklePrism.tests_pass?
 
     unless @options[:force] or passed then
-      raise Error, "Initial run of tests failed... fix and run heckle again"
+      raise Error, "Initial run of tests failed... fix and run heckle_prism again"
     end
 
     if HecklePrism.guess_timeout? then

@@ -824,7 +824,7 @@ class TestHecklePrism < Minitest::Test
 
     assert_equal true, result
     message = "Not run: a test thread could not be stopped. Heckle cannot judge a mutant in this " \
-              "process any more; run heckle with --fork to judge it."
+              "process any more; run heckle_prism with --fork to judge it."
     assert_equal [[:not_judged, :unsettled, message, PAIR, PAIR_FIRST],
                   [:not_judged, :unsettled, message, PAIR, PAIR_SECOND]], not_judged_calls(reporter)
     assert_equal [:mutant_totals, 0, 2, { unsettled: 2 }], reporter.calls.last
@@ -1524,7 +1524,7 @@ class TestHecklePrism < Minitest::Test
 
     assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
     refute_includes run.out, "not reached"
-    assert_match(/\Aheckle: HeckleSubjects#answer: the tests went over the memory limit of 500 MB\n\(an allocation failed/,
+    assert_match(/\Aheckle_prism: HeckleSubjects#answer: the tests went over the memory limit of 500 MB\n\(an allocation failed/,
                  run.err)
     assert_includes run.err, "-  42\n+  "
   end

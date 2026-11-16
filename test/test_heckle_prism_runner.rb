@@ -4,10 +4,10 @@ require "rbconfig"
 require "heckle_prism_runner"
 require "bounded_process"
 
-# bin/heckle runs Minitest in-process, so it is exercised as a subprocess in
+# bin/heckle_prism runs Minitest in-process, so it is exercised as a subprocess in
 # the fixture project.
 class TestHecklePrismRunner < Minitest::Test
-  BIN = File.expand_path("../bin/heckle", __dir__)
+  BIN = File.expand_path("../bin/heckle_prism", __dir__)
   PROJECT = File.expand_path("fixtures/minitest_project", __dir__)
   PARTIAL = %w[--tests test/test_doubler_with_a_number.rb].freeze
   TALLY = %w[--tests test/tally_test.rb].freeze
@@ -29,7 +29,7 @@ class TestHecklePrismRunner < Minitest::Test
 
   def test_bin_is_tracked_executable
     root = File.expand_path("..", __dir__)
-    out, _, status = Open3.capture3("git", "ls-files", "-s", "bin/heckle", chdir: root)
+    out, _, status = Open3.capture3("git", "ls-files", "-s", "bin/heckle_prism", chdir: root)
 
     assert status.success?
     assert_match(/\A100755 /, out)
@@ -197,7 +197,7 @@ class TestHecklePrismRunner < Minitest::Test
     _out, err, status = heckle
 
     refute status.success?
-    assert_includes err, "Usage: heckle class_name [method_name]"
+    assert_includes err, "Usage: heckle_prism class_name [method_name]"
   end
 
   def test_unknown_option
@@ -209,7 +209,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_failing_initial_run_aborts
-    out = assert_aborts "Initial run of tests failed... fix and run heckle again",
+    out = assert_aborts "Initial run of tests failed... fix and run heckle_prism again",
                         "Doubler", "double", *BROKEN
 
     refute_includes out, "loaded with"
@@ -269,7 +269,7 @@ class TestHecklePrismRunner < Minitest::Test
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
     assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
     assert_operator run.elapsed, :<, 1 + HecklePrism::Watchdog::GRACE + 5
-    assert_includes run.err, "heckle: Importer#count_to_last: the tests were still running"
+    assert_includes run.err, "heckle_prism: Importer#count_to_last: the tests were still running"
     assert_includes run.err, "swallowed"
     assert_includes run.err, "--- original\n+++ mutation\n def count_to_last\n   rows = 0\n" \
                              "-  (1..@sheet.last).each { rows += 1 }\n+  (1..nil).each { rows += 1 }\n" \
@@ -397,7 +397,7 @@ class TestHecklePrismRunner < Minitest::Test
     assert_equal "", run.err
     assert_equal 2, run.out.scan("!!! Not run: the teardown of SlowTeardownRelayTest#test_pass_on, which heckle " \
                                  "ran after its test was stopped, did not finish within the 1 second timeout.").size
-    assert_includes run.out, "run heckle with --fork to judge it.\n#{BANG}\n--- original\n"
+    assert_includes run.out, "run heckle_prism with --fork to judge it.\n#{BANG}\n--- original\n"
     assert_includes run.out, "1 mutations remaining...\n#{BANG}!!! Not run: "
     refute_includes run.out, "No mutants survived."
     refute_includes run.out, "YAY"
@@ -405,7 +405,7 @@ class TestHecklePrismRunner < Minitest::Test
                              "Heckle Results:\n\nPassed    :   0\nFailed    :   0\nThick Skin:   0\n" \
                              "Not Run   :   1\n" \
                              "Mutants   :   0 killed, 1 timed out, 2 not run, 0 survived\n\n" \
-                             "2 mutants were not run. Run heckle with --fork to judge them.\n"), run.out
+                             "2 mutants were not run. Run heckle_prism with --fork to judge them.\n"), run.out
     assert_equal 1, run.status.exitstatus
 
     assert_judged_after_a_timeout(bounded_heckle(*args, "--fork"), "fork")
@@ -422,7 +422,7 @@ class TestHecklePrismRunner < Minitest::Test
                              "Heckle Results:\n\nPassed    :   0\nFailed    :   1\nThick Skin:   0\n" \
                              "Mutants   :   0 killed, 1 timed out, 1 not run, 1 survived\n\n" \
                              "Improve the tests and try again.\n" \
-                             "1 mutant was not run. Run heckle with --fork to judge it.\n"), run.out
+                             "1 mutant was not run. Run heckle_prism with --fork to judge it.\n"), run.out
     assert_equal 1, run.status.exitstatus
   end
 
@@ -440,7 +440,7 @@ class TestHecklePrismRunner < Minitest::Test
     assert run.out.end_with?("Heckle Results:\n\nPassed    :   1\nFailed    :   0\nThick Skin:   1\n" \
                              "Not Run   :   2\n" \
                              "Mutants   :   1 killed, 1 timed out, 2 not run, 0 survived\n\n" \
-                             "2 mutants were not run. Run heckle with --fork to judge them.\n"), run.out
+                             "2 mutants were not run. Run heckle_prism with --fork to judge them.\n"), run.out
     assert_equal 1, run.status.exitstatus
   end
 
@@ -470,7 +470,7 @@ class TestHecklePrismRunner < Minitest::Test
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
     assert_equal "Memory limit set to 150 MB.", memory_limit_line(run.out)
     assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
-    resident = run.err[/\Aheckle: Hoarder#load: the tests went over the memory limit of 150 MB\n\(resident memory (\d+) MB\)/, 1]
+    resident = run.err[/\Aheckle_prism: Hoarder#load: the tests went over the memory limit of 150 MB\n\(resident memory (\d+) MB\)/, 1]
     assert resident, run.err
     assert_operator Integer(resident), :<, 150 + 150
     assert_includes run.err, "-  (1..@rows.size).each { held << chunk }\n+  (1..nil).each { held << chunk }\n"
@@ -536,7 +536,7 @@ class TestHecklePrismRunner < Minitest::Test
     out, status = Open3.capture2e(RbConfig.ruby, BIN, "Doubler", "double", "-T", "7", *BROKEN, chdir: PROJECT)
 
     refute status.success?
-    assert_equal ["Setting timeout at 7 seconds.", "Initial run of tests failed... fix and run heckle again"],
+    assert_equal ["Setting timeout at 7 seconds.", "Initial run of tests failed... fix and run heckle_prism again"],
                  out.lines.map(&:chomp)
   end
 

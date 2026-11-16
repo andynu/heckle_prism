@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    heckle (4.0.0)
+    heckle_prism (4.0.0)
       minitest (>= 6.1.0)
       prism (>= 2.0.0)
 
@@ -28,7 +28,7 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  heckle!
+  heckle_prism!
   rake
   simplecov (~> 0.22.0)
 

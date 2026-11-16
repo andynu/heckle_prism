@@ -7,7 +7,11 @@ class TestGemspec < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
 
   def spec
-    @spec ||= Dir.chdir(ROOT) { Gem::Specification.load("heckle.gemspec") }
+    @spec ||= Dir.chdir(ROOT) { Gem::Specification.load("heckle_prism.gemspec") }
+  end
+
+  def test_name
+    assert_equal "heckle_prism", spec.name
   end
 
   def test_version_matches_the_library
@@ -20,12 +24,12 @@ class TestGemspec < Minitest::Test
   end
 
   def test_packages_only_the_library_and_executable
-    assert_includes spec.files, "bin/heckle"
+    assert_includes spec.files, "bin/heckle_prism"
     assert_includes spec.files, "lib/heckle_prism.rb"
     assert_includes spec.files, "lib/heckle_prism/version.rb"
     assert_includes spec.files, "README.txt"
     assert_empty spec.files.grep(%r{\Atest/})
-    assert_equal ["heckle"], spec.executables
+    assert_equal ["heckle_prism"], spec.executables
   end
 
   def test_runtime_dependencies
