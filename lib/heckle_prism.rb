@@ -98,55 +98,59 @@ class HecklePrism
 
   attr_reader :method_name
 
-  @@debug = false
-  @@guess_timeout = true
-  @@timeout = 60 # default to something longer (can be overridden by runners)
-  @@fork = false
+  # Settings shared by every heckle in the process; the runner sets them
+  # from the command line. The 60 second timeout stands only until timeout=
+  # is called or the runner, seeing guess_timeout?, sizes one from the
+  # unmutated run.
+  @@debug = @@fork = false
   @@memory_limit = nil
+  @@timeout = 60
+  @@guess_timeout = true
 
-  def self.debug
-    @@debug
-  end
+  class << self
+    ##
+    # True for -v: each mutant is shown and the tests print as they run.
 
-  def self.debug=(value)
-    @@debug = value
-  end
+    def debug = @@debug
 
-  def self.timeout
-    @@timeout
-  end
+    def debug=(on)
+      @@debug = on
+    end
 
-  def self.timeout=(value)
-    @@timeout = value
-    @@guess_timeout = false # We've set the timeout, don't guess
-  end
+    ##
+    # Seconds one test run may take.
 
-  def self.guess_timeout?
-    @@guess_timeout
-  end
+    def timeout = @@timeout
 
-  ##
-  # True when validate runs each mutant in a forked child.
+    def timeout=(seconds)
+      @@guess_timeout = false
+      @@timeout = seconds
+    end
 
-  def self.fork?
-    @@fork
-  end
+    ##
+    # True until timeout= is called.
 
-  def self.fork=(value)
-    @@fork = value
-  end
+    def guess_timeout? = @@guess_timeout
 
-  ##
-  # The most resident memory, in bytes, a mutant's test run may use, or
-  # nil for no limit. In-process the limit applies to the heckle process,
-  # in fork mode to each child.
+    ##
+    # True when validate runs each mutant in a forked child.
 
-  def self.memory_limit
-    @@memory_limit
-  end
+    def fork? = @@fork
 
-  def self.memory_limit=(bytes)
-    @@memory_limit = bytes
+    def fork=(on)
+      @@fork = on
+    end
+
+    ##
+    # The most resident memory, in bytes, a mutant's test run may use, or
+    # nil for no limit. In-process the limit applies to the heckle process,
+    # in fork mode to each child.
+
+    def memory_limit = @@memory_limit
+
+    def memory_limit=(bytes)
+      @@memory_limit = bytes
+    end
   end
 
   ##
@@ -297,15 +301,14 @@ class HecklePrism
     end
   end
 
+  # Yields with $stdout and $stderr sent to the null device, unless debug.
   def self.quietly
-    return yield if @@debug
-
-    stdout, stderr = $stdout, $stderr
+    saved = [$stdout, $stderr]
     File.open(File::NULL, "w") do |null|
-      $stdout = $stderr = null
+      $stdout = $stderr = null unless @@debug
       yield
     ensure
-      $stdout, $stderr = stdout, stderr
+      $stdout, $stderr = saved
     end
   end
   private_class_method :quietly
