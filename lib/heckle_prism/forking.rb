@@ -27,7 +27,7 @@ class HecklePrism
     end
 
     case status.exitstatus
-    when FORK_SURVIVED then record_passing_mutation
+    when FORK_SURVIVED then record_survivor
     when FORK_KILLED then @reporter.report_test_failures
     when FORK_INSTALL_FAILED then raise_install_error(mutation)
     when FORK_RAISED
@@ -43,8 +43,8 @@ class HecklePrism
   # the memory limit and was killed. Raises HecklePrism::Timeout when it
   # outlives the timeout. The child is stopped and reaped on every path.
   def wait_for_child(mutation)
-    $stdout.flush
-    $stderr.flush
+    # The child inherits unwritten buffers and would print them again.
+    [$stdout, $stderr].each(&:flush)
     outcome = nil
 
     # ^C is held off until the child is tracked, and while it is stopped.

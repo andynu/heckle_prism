@@ -354,8 +354,8 @@ class HecklePrism
           install mutation
           run_tests(*reports)
         end
-      rescue SyntaxError => e
-        report_not_judged :syntax, "Mutation caused a syntax error:\n\n#{e.message}"
+      rescue SyntaxError => error
+        report_not_judged :syntax, "Mutation caused a syntax error:\n\n#{error.message}"
       rescue HecklePrism::Timeout
         report_not_judged :timeout, "Your tests timed out. Heckle may have caused an infinite loop."
       rescue Interrupt
@@ -372,19 +372,17 @@ class HecklePrism
     totals = [@failures.size, @count]
     totals << not_judged unless not_judged.empty?
 
-    unless @failures.empty?
-      @reporter.no_failures
-      @failures.each do |failure|
-        @reporter.failure(dedent(original_source), dedent(failure))
-      end
-      @reporter.mutant_totals(*totals)
-      false
-    else
+    clean = @failures.empty?
+    if clean
       # Mutants that were not run might have survived.
       @reporter.no_surviving_mutants unless not_judged.key?(:unsettled)
-      @reporter.mutant_totals(*totals)
-      true
+    else
+      @reporter.no_failures
+      original = dedent(original_source)
+      @failures.each { |survivor| @reporter.failure(original, dedent(survivor)) }
     end
+    @reporter.mutant_totals(*totals)
+    clean
   end
 
   ##
@@ -564,11 +562,7 @@ class HecklePrism
     end
     raise HecklePrism::Timeout if watchdog.fired?
 
-    if passed then
-      record_passing_mutation
-    else
-      @reporter.report_test_failures
-    end
+    passed ? record_survivor : @reporter.report_test_failures
   end
 
   # The reports are built before install, so the watchdog writes them
@@ -630,7 +624,8 @@ class HecklePrism
     lines.join("\n") + "\n"
   end
 
-  def record_passing_mutation
+  # The tests passed against the current mutant.
+  def record_survivor
     @failures << @current_mutant
   end
 

@@ -1061,7 +1061,7 @@ class TestHecklePrism < Minitest::Test
       refute HecklePrism.method_defined?(name), "#{name} should not exist"
     end
     assert HecklePrism.public_method_defined?(:failures=)
-    %i[run_tests record_passing_mutation].each do |name|
+    %i[run_tests record_survivor].each do |name|
       assert HecklePrism.private_method_defined?(name), "#{name} should be private"
     end
   end
