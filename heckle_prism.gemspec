@@ -4,6 +4,8 @@ Gem::Specification.new do |spec|
   spec.name = "heckle_prism"
   spec.version = HecklePrism::VERSION
   spec.authors = ["Andy Nutter-Upham"]
+  # The new code is CC0 (see LICENSE), but every copy carries heckle's MIT
+  # notice, so MIT is the license that governs the gem as a whole.
   spec.license = "MIT"
   spec.homepage = "https://github.com/andynu/heckle_prism"
   spec.metadata = {
@@ -25,7 +27,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.4.0"
 
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z lib bin README.md CHANGELOG.md`.split("\x0")
+    `git ls-files -z lib bin README.md CHANGELOG.md LICENSE`.split("\x0")
   end
   spec.bindir = "bin"
   spec.executables = ["heckle_prism"]
