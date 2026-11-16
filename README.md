@@ -1,16 +1,39 @@
 # heckle_prism
 
-heckle_prism is heckle rebuilt on Prism. It was called heckle up to
-version 3. Below, "heckle" in prose means this program; the command,
-the gem and the classes are named heckle_prism and HecklePrism.
+heckle_prism is a mutation tester for Ruby and Minitest, built on Prism.
+Below, "heckle" in prose means this program; the command, the gem and
+the classes are named heckle_prism and HecklePrism.
 
-- home: http://ruby.sadi.st/Heckle.html
-- code: https://github.com/seattlerb/heckle
-- rdoc: http://seattlerb.rubyforge.org/heckle
+- code: https://github.com/andynu/heckle_prism
+- issues: https://github.com/andynu/heckle_prism/issues
+
+## Provenance
+
+heckle_prism is a rewrite of [heckle](https://github.com/seattlerb/heckle)
+by Ryan Davis and Kevin Clark of seattle.rb, whose last commit there is
+6c47800 (2013-05-09). heckle's ideas, its command line, its mutation
+kinds and its Reporter's messages are the model for this one, and its
+history is kept in this repository.
+
+Ryan Davis, Kevin Clark and seattle.rb were not involved in heckle_prism.
+They did not write it, have not reviewed it and are not responsible for
+it. Report problems with heckle_prism here, not to heckle.
+
+The rewrite replaces ruby_parser, ruby2ruby and sexp_processor with Prism.
+It was written by Claude (Fable 5.2, made by Anthropic) under the
+direction of Andy Nutter-Upham. The commits are authored by him and carry
+no per-commit note of which model wrote them; this section is that note
+for all of them since 6c47800.
+
+Versions 3.0.0 and 3.0.1 were bridge versions during the rewrite and
+were still named heckle. They were never published and exist only as the
+v3.0.0 and v3.0.1 tags of this repository. 4.0.0 is the first version
+named heckle_prism. [CHANGELOG.md](CHANGELOG.md) lists what changed in
+each.
 
 ## Description
 
-Heckle is unit test sadism(tm) at its core. Heckle is a mutation tester. It modifies your code and runs your tests to make sure they fail. The idea is that if code can be changed and your tests don't notice, either that code isn't being covered or it doesn't do anything.
+heckle_prism is a mutation tester. It modifies your code and runs your tests to make sure they fail. The idea is that if code can be changed and your tests don't notice, either that code isn't being covered or it doesn't do anything.
 
 It's like hiring a white-hat hacker to try to break into your server and making sure you detect it. You learn the most by trying to break things and watching the outcome in an act of unit test sadism.
 
@@ -202,7 +225,8 @@ default. A reporter that subclasses HecklePrism::Reporter can override any
 of its methods. One that does not must define every method validate
 calls: no_mutations, method_loaded, remaining_mutations, replacing,
 report_test_failures, no_failures, failure, no_surviving_mutants,
-mutant_totals and not_judged. Two of these differ from heckle 3.0.0.
+mutant_totals and not_judged. Two of these differ from the 3.0.0 bridge
+version.
 not_judged(reason, message, original, mutant) is new: it gets each
 mutant that was not judged, with its reason (a key of
 HecklePrism::NOT_JUDGED), the warning text and the dedented original and
@@ -479,7 +503,8 @@ it, and the outcome is read in the parent.
 ## Requirements
 
 - Ruby 3.4 or later. The test suite passes on 3.4.2, 3.4.12, 4.0.0 and
-  4.0.9. For Ruby 2.7 to 3.3, use heckle 3.
+  4.0.9. For Ruby 2.7 to 3.3, use the v3.0.1 tag of this repository,
+  a bridge version that still runs on them.
 - prism 2.0.0 or later. 2.0.0 and 2.1.0 pass the test suite on each of
   those Rubies. Ruby 3.4 and 4.0 come with prism 1, so prism 2 is
   installed as a gem. prism 2.0 and 2.1 do not install on Ruby 4.1.
