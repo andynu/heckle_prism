@@ -8,14 +8,14 @@ $LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
   $LOAD_PATH.unshift(path) unless $LOAD_PATH.include?(path)
 end
 
-require 'heckle_runner'
+require 'heckle_prism_runner'
 
 # Unbuffered, so results keep their place among stderr lines (warnings,
 # aborts) when both streams go to one file or pipe.
 $stdout.sync = true
 
 begin
-  exit HeckleRunner.run
+  exit HecklePrismRunner.run
 rescue Errno::EPIPE
   # The reader of stdout went away (heckle ... | head). Any installed
   # mutant was restored on the way out. Under bundle exec an escaping

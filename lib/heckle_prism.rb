@@ -1,19 +1,19 @@
 require "prism"
 require "tempfile"
 require "minitest"
-require "heckle/version"
-require "heckle/method_finder"
-require "heckle/mutation"
-require "heckle/mutator"
-require "heckle/forking"
-require "heckle/memory"
-require "heckle/watchdog"
-require "heckle/settling"
+require "heckle_prism/version"
+require "heckle_prism/method_finder"
+require "heckle_prism/mutation"
+require "heckle_prism/mutator"
+require "heckle_prism/forking"
+require "heckle_prism/memory"
+require "heckle_prism/watchdog"
+require "heckle_prism/settling"
 
 ##
 # Test Unit Sadism
 
-class Heckle
+class HecklePrism
 
   # Minitest records any other exception as a test error, which would spend
   # the timeout on one test and let the next one loop forever.
@@ -41,7 +41,7 @@ class Heckle
   BRANCH_NODES = [:if, :until, :while].freeze
 
   ##
-  # All assignment nodes that can be mutated by Heckle.
+  # All assignment nodes that can be mutated by HecklePrism.
 
   ASGN_NODES = [:cvasgn, :gasgn, :iasgn, :lasgn].freeze
 
@@ -174,12 +174,12 @@ class Heckle
   private_class_method :leave_coverage_alone
 
   ##
-  # Creates a new Heckle that will heckle +klass_name+ and +method_name+,
+  # Creates a new HecklePrism that will heckle +klass_name+ and +method_name+,
   # sending results to +reporter+. +method_name+ is "foo" for an instance
   # method and "self.foo" for a class method.
 
   def initialize(klass_name, method_name,
-                 nodes = Heckle::MUTATABLE_NODES, reporter = Reporter.new)
+                 nodes = HecklePrism::MUTATABLE_NODES, reporter = Reporter.new)
     @klass_name = klass_name.to_s
     @method_name = method_name.to_sym
     @reporter = reporter
@@ -231,7 +231,7 @@ class Heckle
   # is preserved.
 
   def install(mutation)
-    # Built while the original method is live: heckling Heckle itself
+    # Built while the original method is live: heckling HecklePrism itself
     # replaces methods that building the source calls.
     source, line = install_source(mutation)
 
@@ -264,7 +264,7 @@ class Heckle
 
   ##
   # Runs every loaded Minitest runnable in-process and returns true when all
-  # passed (skips count as passing). Silent unless Heckle.debug.
+  # passed (skips count as passing). Silent unless HecklePrism.debug.
 
   def self.tests_pass?
     Minitest.seed ||= Random.new_seed % 0xFFFF
@@ -343,8 +343,8 @@ class Heckle
         @count += 1
         if @@fork then
           run_forked mutation
-        elsif Heckle.unsettled
-          report_not_judged :unsettled, "Not run: #{Heckle.unsettled}. Heckle cannot judge a mutant in " \
+        elsif HecklePrism.unsettled
+          report_not_judged :unsettled, "Not run: #{HecklePrism.unsettled}. Heckle cannot judge a mutant in " \
                                         "this process any more; run heckle with --fork to judge it."
         else
           reports = [swallowed_timeout_report, memory_report]
@@ -353,7 +353,7 @@ class Heckle
         end
       rescue SyntaxError => e
         report_not_judged :syntax, "Mutation caused a syntax error:\n\n#{e.message}"
-      rescue Heckle::Timeout
+      rescue HecklePrism::Timeout
         report_not_judged :timeout, "Your tests timed out. Heckle may have caused an infinite loop."
       rescue Interrupt
         report_not_judged :canceled, 'Mutation canceled, hit ^C again to exit'
@@ -465,7 +465,7 @@ class Heckle
           b.puts(mutation)
           b.flush
 
-          output = `#{Heckle::DIFF} -U #{length} --label original #{a.path} --label mutation #{b.path}`
+          output = `#{HecklePrism::DIFF} -U #{length} --label original #{a.path} --label mutation #{b.path}`
           puts output.sub(/^@@.*?\n/, '')
           puts
         end
@@ -481,7 +481,7 @@ class Heckle
     # +reason+ is :timeout, :memory (fork mode), :crash (the forked child
     # raised, died by a signal or exited oddly), :install (installing it
     # raised in the forked child), :syntax, :canceled (^C) or :unsettled
-    # (not run, see Heckle.unsettled). +message+ is the warning,
+    # (not run, see HecklePrism.unsettled). +message+ is the warning,
     # +original+ and +mutant+ the dedented sources.
 
     def not_judged(reason, message, original, mutant)
@@ -494,7 +494,7 @@ class Heckle
     end
 
     ##
-    # +not_judged+ is Heckle#not_judged, passed only when it is not empty.
+    # +not_judged+ is HecklePrism#not_judged, passed only when it is not empty.
 
     def mutant_totals(survived, total, not_judged = {})
       puts "#{survived} of #{total} mutants survived"
@@ -516,7 +516,7 @@ class Heckle
     end
 
     def report_test_failures
-      puts "Tests failed -- this is good" if Heckle.debug
+      puts "Tests failed -- this is good" if HecklePrism.debug
     end
   end
 
@@ -543,7 +543,7 @@ class Heckle
 
       Watchdog.end_process(memory_report.call(nil))
     end
-    raise Heckle::Timeout if watchdog.fired?
+    raise HecklePrism::Timeout if watchdog.fired?
 
     if passed then
       record_passing_mutation

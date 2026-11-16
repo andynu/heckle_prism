@@ -1,6 +1,6 @@
 require "prism"
 
-class Heckle
+class HecklePrism
   # Locates a method definition in Ruby source by class path and method name.
   class MethodFinder
     Result = Struct.new(:def_node, :nesting)

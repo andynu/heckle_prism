@@ -1,6 +1,6 @@
 require "minitest/autorun"
-require "heckle/method_finder"
-require "heckle/mutator"
+require "heckle_prism/method_finder"
+require "heckle_prism/mutator"
 
 class TestMutator < Minitest::Test
   FIXTURE = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
@@ -16,7 +16,7 @@ class TestMutator < Minitest::Test
   # Mutated sources of HeckleDummy#method_name, in mutation order. Lines after
   # the first lose the def's indentation, so expectations read as flush-left.
   def fixture_mutants(method_name, kinds, randomizer = STUB)
-    def_node = Heckle::MethodFinder.new(fixture_source).find("HeckleDummy", method_name).def_node
+    def_node = HecklePrism::MethodFinder.new(fixture_source).find("HeckleDummy", method_name).def_node
     mutants_of(def_node, kinds, randomizer)
   end
 
@@ -28,7 +28,7 @@ class TestMutator < Minitest::Test
 
   def mutants_of(def_node, kinds, randomizer)
     indent = def_node.location.start_column
-    mutations = Heckle::Mutator.new(randomizer).mutations_for(def_node)
+    mutations = HecklePrism::Mutator.new(randomizer).mutations_for(def_node)
     mutations = mutations.select { |mutation| Array(kinds).include?(mutation.kind) }
     mutations.map do |mutation|
       text = mutation.apply(def_node.slice, def_node.location.start_offset)
@@ -730,7 +730,7 @@ class TestMutator < Minitest::Test
 
   def mutation_kinds(source)
     def_node = Prism.parse(source).value.statements.body.first
-    Heckle::Mutator.new(STUB).mutations_for(def_node).map(&:kind)
+    HecklePrism::Mutator.new(STUB).mutations_for(def_node).map(&:kind)
   end
 
   def test_block_pass_argument_is_a_call
@@ -1172,8 +1172,8 @@ class TestMutator < Minitest::Test
   end
 
   def test_many_things_full_list
-    def_node = Heckle::MethodFinder.new(fixture_source).find("HeckleDummy", "uses_many_things").def_node
-    mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
+    def_node = HecklePrism::MethodFinder.new(fixture_source).find("HeckleDummy", "uses_many_things").def_node
+    mutations = HecklePrism::Mutator.new(STUB).mutations_for(def_node)
     triples = mutations.map do |mutation|
       text = fixture_source.byteslice(mutation.start_offset, mutation.end_offset - mutation.start_offset)
       [mutation.kind, text, mutation.replacement]
@@ -1206,7 +1206,7 @@ class TestMutator < Minitest::Test
 
   def test_mutations_are_sorted_by_start_then_widest_first
     def_node = Prism.parse("def m\n  [true, false, true]\nend\n").value.statements.body.first
-    mutations = Heckle::Mutator.new(STUB).mutations_for(def_node)
+    mutations = HecklePrism::Mutator.new(STUB).mutations_for(def_node)
 
     assert_equal mutations.sort_by { |m| [m.start_offset, -m.end_offset] }, mutations
     assert_equal %i[true false true], mutations.map(&:kind)

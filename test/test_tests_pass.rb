@@ -2,9 +2,9 @@ require "minitest/autorun"
 require "open3"
 require "rbconfig"
 require "bounded_process"
-require "heckle/watchdog"
+require "heckle_prism/watchdog"
 
-# Heckle#tests_pass? runs Minitest in-process, so it is exercised in a
+# HecklePrism#tests_pass? runs Minitest in-process, so it is exercised in a
 # subprocess against the fixture project rather than inside this suite.
 class TestTestsPass < Minitest::Test
   LIB = File.expand_path("../lib", __dir__)
@@ -13,7 +13,7 @@ class TestTestsPass < Minitest::Test
   # Counts test runs in $runs and prints the count after every other
   # at_exit handler, including any Minitest would register.
   PRELUDE = <<~RUBY
-    require "heckle"
+    require "heckle_prism"
     require "doubler"
     $runs = 0
     at_exit { puts "runs=\#{$runs}" }
@@ -34,22 +34,22 @@ class TestTestsPass < Minitest::Test
 
   def test_passing_suite
     assert_drive "true\nruns=3\n", <<~RUBY
-      Heckle.load_tests(Dir.glob("test/test_*.rb"))
-      p Heckle.new("Doubler", "double").tests_pass?
+      HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
+      p HecklePrism.new("Doubler", "double").tests_pass?
     RUBY
   end
 
   def test_failing_suite
     assert_drive "false\nruns=1\n", <<~RUBY
-      Heckle.load_tests(["broken/broken_doubler_test.rb"])
-      p Heckle.new("Doubler", "double").tests_pass?
+      HecklePrism.load_tests(["broken/broken_doubler_test.rb"])
+      p HecklePrism.new("Doubler", "double").tests_pass?
     RUBY
   end
 
   def test_repeated_calls_follow_the_code_under_test
     assert_drive "[true, false, true]\nruns=9\n", <<~RUBY
-      Heckle.load_tests(Dir.glob("test/test_*.rb"))
-      heckle = Heckle.new("Doubler", "double", [:if])
+      HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
+      heckle = HecklePrism.new("Doubler", "double", [:if])
       results = [heckle.tests_pass?]
       heckle.install(heckle.mutations.first)
       results << heckle.tests_pass?
@@ -64,8 +64,8 @@ class TestTestsPass < Minitest::Test
   # repeat by chance with probability 200**-20.
   def test_suite_runs_do_not_repeat_random_replacements
     assert_drive "false\nruns=2\n", <<~RUBY
-      Heckle.load_tests(["test/test_doubler_with_a_number.rb", "test/test_helper.rb"])
-      draws = [Heckle.new("Doubler", "double"), Heckle.new("Halver", "halve")].map do |heckle|
+      HecklePrism.load_tests(["test/test_doubler_with_a_number.rb", "test/test_helper.rb"])
+      draws = [HecklePrism.new("Doubler", "double"), HecklePrism.new("Halver", "halve")].map do |heckle|
         heckle.tests_pass?
         Array.new(20) { heckle.rand_number }
       end
@@ -78,7 +78,7 @@ class TestTestsPass < Minitest::Test
       class SkippingTest < Minitest::Test
         def test_skipped; skip "later"; end
       end
-      p Heckle.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Doubler", "double").tests_pass?
     RUBY
   end
 
@@ -87,7 +87,7 @@ class TestTestsPass < Minitest::Test
       class NoisyTest < Minitest::Test
         def test_noise; puts "out"; warn "err"; $stderr.puts "err"; end
       end
-      p Heckle.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Doubler", "double").tests_pass?
     RUBY
   end
 
@@ -96,8 +96,8 @@ class TestTestsPass < Minitest::Test
       class NoisyTest < Minitest::Test
         def test_noise; puts "out"; end
       end
-      Heckle.debug = true
-      Heckle.new("Doubler", "double").tests_pass?
+      HecklePrism.debug = true
+      HecklePrism.new("Doubler", "double").tests_pass?
     RUBY
 
     assert status.success?
@@ -108,7 +108,7 @@ class TestTestsPass < Minitest::Test
 
   def test_autorun_does_not_run_the_suite_at_exit
     out, err, status = drive(<<~RUBY)
-      Heckle.load_tests(Dir.glob("test/test_*.rb"))
+      HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
     RUBY
 
     assert status.success?
@@ -117,7 +117,7 @@ class TestTestsPass < Minitest::Test
   end
 
   def test_timeout_escapes_the_test
-    assert_drive "Heckle::Timeout\nruns=1\n", <<~RUBY
+    assert_drive "HecklePrism::Timeout\nruns=1\n", <<~RUBY
       require "timeout"
       class SlowTest < Minitest::Test
         def test_a; sleep 5; end
@@ -125,8 +125,8 @@ class TestTestsPass < Minitest::Test
       end
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
-        Timeout.timeout(0.2, Heckle::Timeout) { Heckle.new("Doubler", "double").tests_pass? }
-      rescue Heckle::Timeout => e
+        Timeout.timeout(0.2, HecklePrism::Timeout) { HecklePrism.new("Doubler", "double").tests_pass? }
+      rescue HecklePrism::Timeout => e
         p e.class
       end
       abort "slow" if Process.clock_gettime(Process::CLOCK_MONOTONIC) - started > 2
@@ -147,8 +147,8 @@ class TestTestsPass < Minitest::Test
     end
 
     def watched(seconds)
-      Heckle::Watchdog.new(seconds, "swallowed\n").watch { Heckle.tests_pass? }
-    rescue Heckle::Timeout
+      HecklePrism::Watchdog.new(seconds, "swallowed\n").watch { HecklePrism.tests_pass? }
+    rescue HecklePrism::Timeout
       :timeout
     end
 
@@ -156,7 +156,7 @@ class TestTestsPass < Minitest::Test
     $spin = true
     p watched(0.3)
     started = now
-    Heckle.settle
+    HecklePrism.settle
     puts(now - started < 2 ? "settled" : "settled slowly")
     $spin = false
     p watched(5)
@@ -223,13 +223,13 @@ class TestTestsPass < Minitest::Test
         end
       end
       begin
-        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
-      rescue Heckle::Timeout
+        HecklePrism::Watchdog.new(0.3, "swallowed\n").watch { HecklePrism.tests_pass? }
+      rescue HecklePrism::Timeout
         p $events
       end
-      Heckle.settle
+      HecklePrism.settle
       p $events
-      Heckle.settle
+      HecklePrism.settle
       p $events
     RUBY
 
@@ -256,19 +256,19 @@ class TestTestsPass < Minitest::Test
         end
       end
       $stdout.sync = true
-      Heckle.timeout = 1
+      HecklePrism.timeout = 1
       begin
-        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
-      rescue Heckle::Timeout
+        HecklePrism::Watchdog.new(0.3, "swallowed\n").watch { HecklePrism.tests_pass? }
+      rescue HecklePrism::Timeout
         puts "stopped"
       end
-      Heckle.settle
+      HecklePrism.settle
       puts "not reached"
     RUBY
 
     refute run.killed, run.out
     assert_equal "stopped\n", run.out
-    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
     assert run.err.start_with?("heckle: the teardown of StuckTeardownTest#test_spin, which heckle ran after " \
                                "its test was stopped,\nwas still running 2 seconds after the 1 second timeout"), run.err
     assert_includes run.err, "--fork"
@@ -287,14 +287,14 @@ class TestTestsPass < Minitest::Test
           Thread.handle_interrupt(Object => :never) { sleep 0.01 while $hold }
         end
       end
-      p Heckle.unsettled
+      p HecklePrism.unsettled
       begin
-        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
-      rescue Heckle::Timeout
+        HecklePrism::Watchdog.new(0.3, "swallowed\n").watch { HecklePrism.tests_pass? }
+      rescue HecklePrism::Timeout
         puts "stopped"
       end
-      Heckle.settle
-      puts Heckle.unsettled
+      HecklePrism.settle
+      puts HecklePrism.unsettled
       $hold = false
     RUBY
 
@@ -314,14 +314,14 @@ class TestTestsPass < Minitest::Test
           loop {}
         end
       end
-      Heckle.timeout = 1
+      HecklePrism.timeout = 1
       begin
-        Heckle::Watchdog.new(0.3, "swallowed\n").watch { Heckle.tests_pass? }
-      rescue Heckle::Timeout
+        HecklePrism::Watchdog.new(0.3, "swallowed\n").watch { HecklePrism.tests_pass? }
+      rescue HecklePrism::Timeout
         puts "stopped"
       end
-      Heckle.settle
-      puts Heckle.unsettled
+      HecklePrism.settle
+      puts HecklePrism.unsettled
     RUBY
 
     refute run.killed, run.out
@@ -331,10 +331,10 @@ class TestTestsPass < Minitest::Test
 
   def test_settle_without_a_stopped_run_does_nothing
     assert_drive "true\nnil\ntrue\nruns=3\n", <<~RUBY
-      Heckle.load_tests(Dir.glob("test/test_*.rb"))
+      HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
       executor = Minitest.parallel_executor
-      p Heckle.new("Doubler", "double").tests_pass?
-      p Heckle.settle
+      p HecklePrism.new("Doubler", "double").tests_pass?
+      p HecklePrism.settle
       p Minitest.parallel_executor.equal?(executor)
     RUBY
   end

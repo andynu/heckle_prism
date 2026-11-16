@@ -1,4 +1,4 @@
-class Heckle
+class HecklePrism
 
   ##
   # The version of Heckle you are using.

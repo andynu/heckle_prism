@@ -1,4 +1,4 @@
-class Heckle
+class HecklePrism
   ##
   # Raised in the test run when it outlives the timeout. Not a
   # StandardError, so that neither a bare rescue nor a rescue of
@@ -8,7 +8,7 @@ class Heckle
 
   ##
   # Runs a block in the current thread under a deadline kept by a thread
-  # of its own. At the deadline the watchdog raises Heckle::Timeout in the
+  # of its own. At the deadline the watchdog raises HecklePrism::Timeout in the
   # block's thread, and again every RERAISE_INTERVAL seconds while the
   # block runs on. If the block is still running GRACE seconds after the
   # first raise, the code under test has swallowed the timeout: the
@@ -86,7 +86,7 @@ class Heckle
 
     ##
     # Runs the block and returns its value. Asynchronous exceptions
-    # (Heckle::Timeout, ^C) are held off outside the block itself, so none
+    # (HecklePrism::Timeout, ^C) are held off outside the block itself, so none
     # lands in this method's own bookkeeping and leaves the watchdog
     # running; one raised as the block returns arrives on the way out.
 
@@ -125,7 +125,7 @@ class Heckle
             give_up ||= time + GRACE
             self.class.end_process(@report) if time >= give_up
             @fired = true
-            target.raise(Heckle::Timeout)
+            target.raise(HecklePrism::Timeout)
             next_raise = [time + RERAISE_INTERVAL, give_up].min
           end
           wake = @memory_limit ? [next_raise, next_poll].min : next_raise

@@ -1,8 +1,8 @@
-require_relative "lib/heckle/version"
+require_relative "lib/heckle_prism/version"
 
 Gem::Specification.new do |spec|
   spec.name = "heckle"
-  spec.version = Heckle::VERSION
+  spec.version = HecklePrism::VERSION
   spec.authors = ["Ryan Davis", "Pete Higgins"]
   spec.license = "MIT"
 

@@ -1,7 +1,7 @@
 require 'optparse'
-require 'heckle'
+require 'heckle_prism'
 
-class HeckleRunner
+class HecklePrismRunner
   ##
   # Raised for a usage problem; bin/heckle reports its message without a
   # backtrace.
@@ -20,7 +20,7 @@ class HeckleRunner
     abort "Usage: #{File.basename $0} class_name [method_name]" unless class_or_module
 
     new(class_or_module, method, options).run
-  rescue OptionParser::ParseError, Error, Heckle::SourceNotFound => e
+  rescue OptionParser::ParseError, Error, HecklePrism::SourceNotFound => e
     abort e.message
   end
 
@@ -32,7 +32,7 @@ class HeckleRunner
   def self.parse_args argv
     options = {
       :force => false,
-      :nodes => Heckle::MUTATABLE_NODES,
+      :nodes => HecklePrism::MUTATABLE_NODES,
       :debug => false,
       :timeout => nil,
       :test_pattern => DEFAULT_TEST_PATTERNS,
@@ -41,7 +41,7 @@ class HeckleRunner
     tests = []
 
     OptionParser.new do |opts|
-      opts.version = Heckle::VERSION
+      opts.version = HecklePrism::VERSION
       opts.program_name = File.basename $0
       opts.banner = "Usage: #{opts.program_name} class_name [method_name]"
       opts.on("-v", "--verbose", "Loudly explain heckle run") do
@@ -65,7 +65,7 @@ class HeckleRunner
         puts "!"*70
         puts
 
-        options[:nodes] = Heckle::ASGN_NODES
+        options[:nodes] = HecklePrism::ASGN_NODES
       end
 
       opts.on("-b", "--branches", "Only mutate branches") do
@@ -74,7 +74,7 @@ class HeckleRunner
         puts "!"*70
         puts
 
-        options[:nodes] = Heckle::BRANCH_NODES
+        options[:nodes] = HecklePrism::BRANCH_NODES
       end
 
       opts.on("-T", "--timeout SECONDS", Integer, "The maximum time for a test run in seconds",
@@ -104,7 +104,7 @@ class HeckleRunner
       end
 
       opts.on("-n", "--nodes NODES", "Nodes to mutate",
-              "Possible values: #{Heckle::MUTATABLE_NODES.join(',')}") do |opt|
+              "Possible values: #{HecklePrism::MUTATABLE_NODES.join(',')}") do |opt|
         nodes = opt.split(',').collect {|n| n.to_sym }
         options[:nodes] = nodes
         puts "Mutating nodes: #{nodes.inspect}"
@@ -121,10 +121,10 @@ class HeckleRunner
 
     p options if options[:debug]
 
-    Heckle.debug = options[:debug]
-    Heckle.timeout = options[:timeout] if options[:timeout]
+    HecklePrism.debug = options[:debug]
+    HecklePrism.timeout = options[:timeout] if options[:timeout]
     # Absent unless given, so -v prints the options as without the flag.
-    Heckle.fork = options.fetch(:fork, false)
+    HecklePrism.fork = options.fetch(:fork, false)
 
     options
   end
@@ -135,7 +135,7 @@ class HeckleRunner
   # there are some.
 
   def self.mutants_line killed, not_judged, survived
-    judged_not = Heckle::Reporter.tally(not_judged)
+    judged_not = HecklePrism::Reporter.tally(not_judged)
     judged_not += ", " unless judged_not.empty?
     "Mutants   : %3d killed, %s%d survived" % [killed, judged_not, survived]
   end
@@ -152,7 +152,7 @@ class HeckleRunner
   end
 
   def self.canonical nodes
-    nodes.map { |node| Heckle::NODE_ALIASES.fetch(node, node) }
+    nodes.map { |node| HecklePrism::NODE_ALIASES.fetch(node, node) }
   end
 
   def initialize class_or_module, method, options={}
@@ -217,7 +217,7 @@ class HeckleRunner
   private
 
   def check_nodes
-    unknown = self.class.canonical(@options[:nodes]) - Heckle::MUTATABLE_NODES
+    unknown = self.class.canonical(@options[:nodes]) - HecklePrism::MUTATABLE_NODES
     raise Error, "Unknown mutation kind: #{unknown.join(',')}" unless unknown.empty?
   end
 
@@ -230,7 +230,7 @@ class HeckleRunner
     empty = [] if patterns == DEFAULT_TEST_PATTERNS && empty.size < patterns.size
     raise Error, "No test files match #{empty.join(' or ')}" unless empty.empty?
 
-    Heckle.load_tests(matches.flatten.uniq)
+    HecklePrism.load_tests(matches.flatten.uniq)
   end
 
   def build_hecklers
@@ -241,7 +241,7 @@ class HeckleRunner
       next unless in_project?(klass, name)
 
       heckler(name)
-    rescue Heckle::SourceNotFound => e
+    rescue HecklePrism::SourceNotFound => e
       puts "Skipping #{e.message}"
     end
   end
@@ -253,7 +253,7 @@ class HeckleRunner
     file, line = owner.instance_method(name.delete_prefix("self.")).source_location
     return true if file && inside_project?(file)
 
-    if Heckle.debug
+    if HecklePrism.debug
       where = file ? "defined outside the project, at #{file}:#{line}" : "no source location"
       puts "Skipping #{@class_or_module}##{name}: #{where}"
     end
@@ -269,7 +269,7 @@ class HeckleRunner
   end
 
   def heckler name
-    Heckle.new(@class_or_module, name, @options[:nodes])
+    HecklePrism.new(@class_or_module, name, @options[:nodes])
   end
 
   # Every method the class defines itself, whatever its visibility.
@@ -292,37 +292,37 @@ class HeckleRunner
   # Without -T the timeout is twice the unmutated run, at least 5 seconds.
   def initial_run
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    passed = Heckle.tests_pass?
+    passed = HecklePrism.tests_pass?
 
     unless @options[:force] or passed then
       raise Error, "Initial run of tests failed... fix and run heckle again"
     end
 
-    if Heckle.guess_timeout? then
+    if HecklePrism.guess_timeout? then
       running_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-      Heckle.timeout = (running_time * 2 < 5) ? 5 : (running_time * 2).ceil
+      HecklePrism.timeout = (running_time * 2 < 5) ? 5 : (running_time * 2).ceil
     end
 
-    puts "Timeout set to #{Heckle.timeout} seconds."
+    puts "Timeout set to #{HecklePrism.timeout} seconds."
     puts memory_limit
 
     passed
   end
 
-  # Sets Heckle.memory_limit and returns the line that says what it is.
+  # Sets HecklePrism.memory_limit and returns the line that says what it is.
   # Measured after the unmutated run, which has grown the heap to what
   # the tests need.
   def memory_limit
     megabytes = @options[:memory_limit]
-    Heckle.memory_limit = nil
+    HecklePrism.memory_limit = nil
     return "Memory limit off." if megabytes == 0
 
-    unless Heckle::Memory.readable?
+    unless HecklePrism::Memory.readable?
       return "Memory limit not enforced: resident memory cannot be read on this platform."
     end
 
-    limit = megabytes ? megabytes * Heckle::Memory::MB : Heckle::Memory.default_limit(Heckle::Memory.resident)
-    Heckle.memory_limit = limit
-    "Memory limit set to #{limit / Heckle::Memory::MB} MB."
+    limit = megabytes ? megabytes * HecklePrism::Memory::MB : HecklePrism::Memory.default_limit(HecklePrism::Memory.resident)
+    HecklePrism.memory_limit = limit
+    "Memory limit set to #{limit / HecklePrism::Memory::MB} MB."
   end
 end

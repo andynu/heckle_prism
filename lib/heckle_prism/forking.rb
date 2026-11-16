@@ -1,4 +1,4 @@
-class Heckle
+class HecklePrism
   ##
   # Exit statuses of a fork mode child. Any other status, or death by a
   # signal, is reported as unexpected and is never counted as a survivor.
@@ -40,7 +40,7 @@ class Heckle
   end
 
   # Returns the child's Process::Status, or :over_memory when it went over
-  # the memory limit and was killed. Raises Heckle::Timeout when it
+  # the memory limit and was killed. Raises HecklePrism::Timeout when it
   # outlives the timeout. The child is stopped and reaped on every path.
   def wait_for_child(mutation)
     $stdout.flush
@@ -62,7 +62,7 @@ class Heckle
         end
       end
     end
-    raise Heckle::Timeout unless outcome
+    raise HecklePrism::Timeout unless outcome
 
     outcome == :over_memory ? outcome : outcome.value
   end

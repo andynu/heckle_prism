@@ -57,9 +57,9 @@ class TestConsumerProject < Minitest::Test
   end
 
   def test_uses_the_heckle_in_this_repository
-    out, err, status = bundle_exec("ruby", "-e", 'require "heckle"; puts $LOADED_FEATURES.grep(/heckle\.rb\z/)')
+    out, err, status = bundle_exec("ruby", "-e", 'require "heckle_prism"; puts $LOADED_FEATURES.grep(/heckle_prism\.rb\z/)')
 
     assert status.success?, err
-    assert_equal [File.expand_path("../lib/heckle.rb", __dir__)], out.lines.map(&:chomp)
+    assert_equal [File.expand_path("../lib/heckle_prism.rb", __dir__)], out.lines.map(&:chomp)
   end
 end

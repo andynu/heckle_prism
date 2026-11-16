@@ -1,4 +1,4 @@
-class Heckle
+class HecklePrism
   ##
   # Seconds settle waits for an abandoned executor's workers to stop, and
   # again for those it then kills.
@@ -45,7 +45,7 @@ class Heckle
     def run
       super
     rescue Exception
-      Heckle.send(:stopped, self)
+      HecklePrism.send(:stopped, self)
       raise
     end
   end
@@ -69,7 +69,7 @@ class Heckle
         end
       end
     end
-  rescue Heckle::Timeout
+  rescue HecklePrism::Timeout
     unsettle "the teardown of #{test.class}##{test.name}, which heckle ran after its test was stopped, " \
              "did not finish within the #{@@timeout} second timeout"
   end

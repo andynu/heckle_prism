@@ -1,4 +1,4 @@
-class Heckle
+class HecklePrism
   ##
   # Reads resident memory and keeps the RLIMIT_DATA backstop. Resident
   # memory comes from /proc/PID/status where there is one, otherwise from

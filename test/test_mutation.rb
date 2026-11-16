@@ -1,10 +1,10 @@
 require "minitest/autorun"
 require "prism"
-require "heckle/mutation"
+require "heckle_prism/mutation"
 
 class TestMutation < Minitest::Test
   def mutation(start_offset, end_offset, replacement, kind: :lit)
-    Heckle::Mutation.new(kind: kind, start_offset: start_offset,
+    HecklePrism::Mutation.new(kind: kind, start_offset: start_offset,
                          end_offset: end_offset, replacement: replacement)
   end
 
@@ -18,11 +18,11 @@ class TestMutation < Minitest::Test
   end
 
   def test_positional_arguments
-    assert_equal mutation(1, 3, "x", kind: :true), Heckle::Mutation.new(:true, 1, 3, "x")
+    assert_equal mutation(1, 3, "x", kind: :true), HecklePrism::Mutation.new(:true, 1, 3, "x")
   end
 
   def test_missing_keyword_raises
-    assert_raises(ArgumentError) { Heckle::Mutation.new(kind: :lit, start_offset: 1, end_offset: 3) }
+    assert_raises(ArgumentError) { HecklePrism::Mutation.new(kind: :lit, start_offset: 1, end_offset: 3) }
   end
 
   def test_is_frozen

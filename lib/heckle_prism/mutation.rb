@@ -1,6 +1,6 @@
 require "prism"
 
-class Heckle
+class HecklePrism
   # One source edit: replace the byte range start_offset...end_offset of the
   # file source with replacement. Offsets are bytes, end exclusive.
   Mutation = Data.define(:kind, :start_offset, :end_offset, :replacement) do

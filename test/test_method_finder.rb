@@ -1,12 +1,12 @@
 require "minitest/autorun"
-require "heckle/method_finder"
+require "heckle_prism/method_finder"
 
 class TestMethodFinder < Minitest::Test
   FIXTURE = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
   INNER_CLASS = "HeckleDummy::OuterNesting::InnerNesting::InnerClass"
 
   def fixture_finder
-    @fixture_finder ||= Heckle::MethodFinder.new(File.read(FIXTURE))
+    @fixture_finder ||= HecklePrism::MethodFinder.new(File.read(FIXTURE))
   end
 
   def find_in_fixture(klass_name, method_name)
@@ -14,7 +14,7 @@ class TestMethodFinder < Minitest::Test
   end
 
   def find_in(source, klass_name, method_name)
-    Heckle::MethodFinder.new(source).find(klass_name, method_name)
+    HecklePrism::MethodFinder.new(source).find(klass_name, method_name)
   end
 
   def body_of(result)
@@ -105,8 +105,8 @@ class TestMethodFinder < Minitest::Test
       end
     RUBY
 
-    assert_nil Heckle::MethodFinder.new(source).find("A", "foo", line: 2)
-    assert_equal ":split", body_of(Heckle::MethodFinder.new(source).find("A", "foo", line: 3))
+    assert_nil HecklePrism::MethodFinder.new(source).find("A", "foo", line: 2)
+    assert_equal ":split", body_of(HecklePrism::MethodFinder.new(source).find("A", "foo", line: 3))
   end
 
   def test_missing_method_is_nil
@@ -469,7 +469,7 @@ class TestMethodFinder < Minitest::Test
       end
     RUBY
 
-    assert_equal ":first", body_of(Heckle::MethodFinder.new(source).find("Pair", "foo", line: 2))
+    assert_equal ":first", body_of(HecklePrism::MethodFinder.new(source).find("Pair", "foo", line: 2))
     assert_equal ":second", body_of(find_in(source, "Pair", "foo"))
   end
 

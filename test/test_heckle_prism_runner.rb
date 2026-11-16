@@ -1,12 +1,12 @@
 require "minitest/autorun"
 require "open3"
 require "rbconfig"
-require "heckle_runner"
+require "heckle_prism_runner"
 require "bounded_process"
 
 # bin/heckle runs Minitest in-process, so it is exercised as a subprocess in
 # the fixture project.
-class TestHeckleRunner < Minitest::Test
+class TestHecklePrismRunner < Minitest::Test
   BIN = File.expand_path("../bin/heckle", __dir__)
   PROJECT = File.expand_path("fixtures/minitest_project", __dir__)
   PARTIAL = %w[--tests test/test_doubler_with_a_number.rb].freeze
@@ -267,8 +267,8 @@ class TestHeckleRunner < Minitest::Test
                          "-t", "runaway/retrying_importer_test.rb")
 
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
-    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
-    assert_operator run.elapsed, :<, 1 + Heckle::Watchdog::GRACE + 5
+    assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert_operator run.elapsed, :<, 1 + HecklePrism::Watchdog::GRACE + 5
     assert_includes run.err, "heckle: Importer#count_to_last: the tests were still running"
     assert_includes run.err, "swallowed"
     assert_includes run.err, "--- original\n+++ mutation\n def count_to_last\n   rows = 0\n" \
@@ -340,11 +340,11 @@ class TestHeckleRunner < Minitest::Test
   end
 
   def test_mutants_line
-    assert_equal "Mutants   :   5 killed, 0 survived", HeckleRunner.mutants_line(5, {}, 0)
+    assert_equal "Mutants   :   5 killed, 0 survived", HecklePrismRunner.mutants_line(5, {}, 0)
     assert_equal "Mutants   : 389 killed, 2 timed out, 81 survived",
-                 HeckleRunner.mutants_line(389, { timeout: 2 }, 81)
+                 HecklePrismRunner.mutants_line(389, { timeout: 2 }, 81)
     assert_equal "Mutants   : 1200 killed, 2 timed out, 1 crashed, 1 canceled, 3 survived",
-                 HeckleRunner.mutants_line(1200, { canceled: 1, timeout: 2, crash: 1 }, 3)
+                 HecklePrismRunner.mutants_line(1200, { canceled: 1, timeout: 2, crash: 1 }, 3)
   end
 
   RELAY_SURVIVOR = "The following mutations didn't cause test failures:\n\n" \
@@ -469,7 +469,7 @@ class TestHeckleRunner < Minitest::Test
 
     refute run.killed, "heckle did not finish; stdout:\n#{run.out}"
     assert_equal "Memory limit set to 150 MB.", memory_limit_line(run.out)
-    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
     resident = run.err[/\Aheckle: Hoarder#load: the tests went over the memory limit of 150 MB\n\(resident memory (\d+) MB\)/, 1]
     assert resident, run.err
     assert_operator Integer(resident), :<, 150 + 150
@@ -519,7 +519,7 @@ class TestHeckleRunner < Minitest::Test
   end
 
   def test_memory_limit_not_enforced_where_memory_cannot_be_read
-    script = "require 'heckle'; Heckle::Memory.source = nil; load #{BIN.dump}"
+    script = "require 'heckle_prism'; HecklePrism::Memory.source = nil; load #{BIN.dump}"
     out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__),
                                       "-e", script, "Doubler", "double", chdir: PROJECT)
 
@@ -657,7 +657,7 @@ class TestHeckleRunner < Minitest::Test
   def test_version
     out, _err, status = heckle("--version")
 
-    assert_includes out, Heckle::VERSION
+    assert_includes out, HecklePrism::VERSION
     assert_equal 0, status.exitstatus
   end
 
@@ -733,13 +733,13 @@ class TestHeckleRunner < Minitest::Test
     assert_equal "", out
   end
 
-  # parse_args sets Heckle's global configuration.
+  # parse_args sets HecklePrism's global configuration.
   def parse(*args)
-    saved = %i[@@debug @@timeout @@guess_timeout @@fork].map { |name| Heckle.class_variable_get(name) }
-    out, _err = capture_io { @options = HeckleRunner.parse_args(args) }
+    saved = %i[@@debug @@timeout @@guess_timeout @@fork].map { |name| HecklePrism.class_variable_get(name) }
+    out, _err = capture_io { @options = HecklePrismRunner.parse_args(args) }
     [@options, args, out]
   ensure
-    %i[@@debug @@timeout @@guess_timeout @@fork].zip(saved) { |name, value| Heckle.class_variable_set(name, value) }
+    %i[@@debug @@timeout @@guess_timeout @@fork].zip(saved) { |name, value| HecklePrism.class_variable_set(name, value) }
   end
 
   def test_parse_args_fork
@@ -751,20 +751,20 @@ class TestHeckleRunner < Minitest::Test
   end
 
   def test_parse_args_fork_sets_heckle
-    saved = Heckle.fork?
-    capture_io { HeckleRunner.parse_args(%w[--fork]) }
-    assert_equal true, Heckle.fork?
-    capture_io { HeckleRunner.parse_args(%w[Doubler]) }
-    assert_equal false, Heckle.fork?
+    saved = HecklePrism.fork?
+    capture_io { HecklePrismRunner.parse_args(%w[--fork]) }
+    assert_equal true, HecklePrism.fork?
+    capture_io { HecklePrismRunner.parse_args(%w[Doubler]) }
+    assert_equal false, HecklePrism.fork?
   ensure
-    Heckle.fork = saved
+    HecklePrism.fork = saved
   end
 
   def test_parse_args_defaults
     options, rest, out = parse("Doubler", "double")
 
     assert_equal %w[Doubler double], rest
-    assert_equal Heckle::MUTATABLE_NODES, options[:nodes]
+    assert_equal HecklePrism::MUTATABLE_NODES, options[:nodes]
     assert_equal %w[test/**/test_*.rb test/**/*_test.rb], options[:test_pattern]
     assert_equal false, options[:force]
     assert_equal false, options[:debug]
@@ -797,10 +797,10 @@ class TestHeckleRunner < Minitest::Test
   end
 
   def test_parse_args_leaves_timeout_guess_unless_given
-    guess = Heckle.guess_timeout?
+    guess = HecklePrism.guess_timeout?
     parse("Doubler")
 
-    assert_equal guess, Heckle.guess_timeout?
+    assert_equal guess, HecklePrism.guess_timeout?
   end
 
   def test_parse_args_exclusions_apply_to_selection

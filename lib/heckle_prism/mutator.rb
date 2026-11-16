@@ -1,7 +1,7 @@
 require "prism"
-require "heckle/mutation"
+require "heckle_prism/mutation"
 
-class Heckle
+class HecklePrism
   # Walks one def and collects a Mutation per mutation site. Nothing is
   # applied here. The default visitor descends into every child node, so a
   # visit method only needs to record its own mutation and call super.

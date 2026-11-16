@@ -8,10 +8,10 @@ require "fixtures/heckle_frozen"
 require "fixtures/heckle_blocks"
 require "fixtures/heckle_shorthand"
 require "fixtures/heckle_data"
-require "heckle"
+require "heckle_prism"
 require "bounded_process"
 
-class TestHeckler < Heckle
+class TestHeckler < HecklePrism
   def rand_number
     5
   end
@@ -57,12 +57,12 @@ class ScriptedHeckler < TestHeckler
   end
 end
 
-class TestHeckle < Minitest::Test
+class TestHecklePrism < Minitest::Test
   DUMMY = File.expand_path("fixtures/heckle_dummy.rb", __dir__)
   SUBJECTS = File.expand_path("fixtures/heckle_subjects.rb", __dir__)
   FROZEN = File.expand_path("fixtures/heckle_frozen.rb", __dir__)
 
-  def heckle(klass_name, method_name, nodes = Heckle::MUTATABLE_NODES)
+  def heckle(klass_name, method_name, nodes = HecklePrism::MUTATABLE_NODES)
     heckler = TestHeckler.new(klass_name, method_name, nodes)
     (@hecklers ||= []) << heckler
     heckler
@@ -71,13 +71,13 @@ class TestHeckle < Minitest::Test
   # In-process unless a test says otherwise, whatever heckle --fork set
   # when this suite is itself heckled.
   def setup
-    @fork = Heckle.fork?
-    Heckle.fork = false
+    @fork = HecklePrism.fork?
+    HecklePrism.fork = false
   end
 
   def teardown
     (@hecklers || []).each(&:restore)
-    Heckle.fork = @fork
+    HecklePrism.fork = @fork
   end
 
   # Installs the only mutation of klass_name#method_name of the given kinds.
@@ -250,21 +250,21 @@ class TestHeckle < Minitest::Test
     assert_equal 42, HeckleSubjects.new.answer
   end
 
-  # Heckling Heckle::Mutation#apply: building the mutant source calls the
+  # Heckling HecklePrism::Mutation#apply: building the mutant source calls the
   # method being replaced.
   def test_install_builds_the_mutant_before_removing_the_method
-    heckler = heckle("Heckle::Mutation", "apply", [:lasgn])
+    heckler = heckle("HecklePrism::Mutation", "apply", [:lasgn])
     mutation = heckler.mutations.first
 
     heckler.install(mutation)
     assert_raises(TypeError, NoMethodError) { mutation.apply("x") }
     heckler.restore
-    assert_equal "a = 7", Heckle::Mutation.new(kind: :lit, start_offset: 4, end_offset: 5,
+    assert_equal "a = 7", HecklePrism::Mutation.new(kind: :lit, start_offset: 4, end_offset: 5,
                                                replacement: "7").apply("a = 1")
   end
 
   def test_survivor_text_is_built_without_the_mutant
-    heckler = scripted("Heckle::Mutation", "apply", [:lasgn]) { true }
+    heckler = scripted("HecklePrism::Mutation", "apply", [:lasgn]) { true }
     expected = heckler.mutations.map { |mutation| heckler.mutant_source(mutation) }
 
     heckler.validate
@@ -393,7 +393,7 @@ class TestHeckle < Minitest::Test
       end
       $heckle_loaded = []
 
-      Heckle.load_tests(paths)
+      HecklePrism.load_tests(paths)
 
       assert_equal %w[a b], $heckle_loaded
       assert_equal true, Minitest.class_variable_get(:@@installed_at_exit)
@@ -415,7 +415,7 @@ class TestHeckle < Minitest::Test
     saved = ::SimpleCov.external_at_exit
     ::SimpleCov.external_at_exit = false
 
-    Heckle.load_tests([])
+    HecklePrism.load_tests([])
 
     assert_equal true, ::SimpleCov.external_at_exit
   ensure
@@ -425,11 +425,11 @@ class TestHeckle < Minitest::Test
 
   def test_setting_the_timeout_ends_the_guess
     with_timeout(60) do
-      Heckle.class_variable_set(:@@guess_timeout, true)
-      Heckle.timeout = 3
+      HecklePrism.class_variable_set(:@@guess_timeout, true)
+      HecklePrism.timeout = 3
 
-      refute Heckle.guess_timeout?
-      assert_equal 3, Heckle.timeout
+      refute HecklePrism.guess_timeout?
+      assert_equal 3, HecklePrism.timeout
     end
   end
 
@@ -516,17 +516,17 @@ class TestHeckle < Minitest::Test
   end
 
   def with_timeout(seconds)
-    saved = [Heckle.class_variable_get(:@@timeout), Heckle.class_variable_get(:@@guess_timeout)]
-    Heckle.timeout = seconds
+    saved = [HecklePrism.class_variable_get(:@@timeout), HecklePrism.class_variable_get(:@@guess_timeout)]
+    HecklePrism.timeout = seconds
     yield
   ensure
-    Heckle.class_variable_set(:@@timeout, saved[0])
-    Heckle.class_variable_set(:@@guess_timeout, saved[1])
+    HecklePrism.class_variable_set(:@@timeout, saved[0])
+    HecklePrism.class_variable_set(:@@guess_timeout, saved[1])
   end
 
   def test_validate_without_mutations
     reporter = RecordingReporter.new
-    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk "no run expected" }
+    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, reporter) { flunk "no run expected" }
 
     assert_nil heckler.validate
     assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
@@ -602,8 +602,8 @@ class TestHeckle < Minitest::Test
   def test_debug_replacement_is_dedented
     reporter = RecordingReporter.new
     heckler = scripted("HeckleNesting::Inner", "letter", [:if], reporter) { false }
-    debug = Heckle.debug
-    Heckle.debug = true
+    debug = HecklePrism.debug
+    HecklePrism.debug = true
 
     heckler.validate
 
@@ -611,7 +611,7 @@ class TestHeckle < Minitest::Test
     assert_equal [:replacing, "HeckleNesting::Inner", :letter,
                   LETTER_SHOWN % "if", LETTER_SHOWN % "unless"], replacing
   ensure
-    Heckle.debug = debug
+    HecklePrism.debug = debug
   end
 
   def test_dedent_uses_the_def_line_indentation
@@ -689,16 +689,16 @@ class TestHeckle < Minitest::Test
   # stray timeout into whatever runs next and later ends the process.
   def test_interrupt_as_the_run_returns_still_stops_the_watchdog
     script = <<~'RUBY'
-      require "heckle"
+      require "heckle_prism"
       $stdout.sync = true
-      Heckle::Memory.singleton_class.prepend(Module.new do
+      HecklePrism::Memory.singleton_class.prepend(Module.new do
         def resident(_pid = Process.pid)
           sleep 0.3
           1
         end
       end)
       main = Thread.current
-      dog = Heckle::Watchdog.new(0.5, "watchdog ended the process\n",
+      dog = HecklePrism::Watchdog.new(0.5, "watchdog ended the process\n",
                                  memory_limit: 2**60, memory_report: ->(_r) { "over\n" })
       returned = false
       Thread.new do
@@ -713,7 +713,7 @@ class TestHeckle < Minitest::Test
       begin
         sleep 3
         puts "quiet"
-      rescue Heckle::Timeout
+      rescue HecklePrism::Timeout
         puts "stray timeout"
       end
     RUBY
@@ -728,14 +728,14 @@ class TestHeckle < Minitest::Test
   # waits on the watchdog's lock until the watchdog ends the process.
   def test_slow_memory_reads_do_not_keep_a_finished_run_waiting
     script = <<~'RUBY'
-      require "heckle"
-      Heckle::Memory.singleton_class.prepend(Module.new do
+      require "heckle_prism"
+      HecklePrism::Memory.singleton_class.prepend(Module.new do
         def resident(_pid = Process.pid)
           sleep 0.3
           1
         end
       end)
-      dog = Heckle::Watchdog.new(0.5, "watchdog ended the process\n",
+      dog = HecklePrism::Watchdog.new(0.5, "watchdog ended the process\n",
                                  memory_limit: 2**60, memory_report: ->(_r) { "over\n" })
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       dog.watch { sleep 0.05 }
@@ -755,21 +755,21 @@ class TestHeckle < Minitest::Test
     original = heckler.original_source
     mutant = heckler.mutant_source(heckler.mutations.first)
 
-    out, _err = capture_io { Heckle::Reporter.new.diff(original, mutant) }
+    out, _err = capture_io { HecklePrism::Reporter.new.diff(original, mutant) }
     assert_equal out.chomp, heckler.send(:plain_diff, original, mutant)
   end
 
   def test_timeout_is_not_caught_by_a_bare_rescue
-    refute_operator Heckle::Timeout, :<=, StandardError
-    assert_includes Minitest::Test::PASSTHROUGH_EXCEPTIONS, Heckle::Timeout
+    refute_operator HecklePrism::Timeout, :<=, StandardError
+    assert_includes Minitest::Test::PASSTHROUGH_EXCEPTIONS, HecklePrism::Timeout
 
     caught = begin
       begin
-        raise Heckle::Timeout
+        raise HecklePrism::Timeout
       rescue
         :bare_rescue
       end
-    rescue Heckle::Timeout
+    rescue HecklePrism::Timeout
       :passed_through
     end
     assert_equal :passed_through, caught
@@ -789,7 +789,7 @@ class TestHeckle < Minitest::Test
     assert_equal [:mutant_totals, 0, 2, { syntax: 1 }], reporter.calls.last
   end
 
-  # Reasons are counted per heckler run and listed in Heckle::NOT_JUDGED
+  # Reasons are counted per heckler run and listed in HecklePrism::NOT_JUDGED
   # order, whatever order they happened in.
   def test_not_judged_counts_each_reason
     heckler = scripted("HeckleSubjects", "pair", [:lit]) do |h|
@@ -806,11 +806,11 @@ class TestHeckle < Minitest::Test
   end
 
   def with_unsettled(reason)
-    saved = Heckle.class_variable_get(:@@unsettled)
-    Heckle.class_variable_set(:@@unsettled, reason)
+    saved = HecklePrism.class_variable_get(:@@unsettled)
+    HecklePrism.class_variable_set(:@@unsettled, reason)
     yield
   ensure
-    Heckle.class_variable_set(:@@unsettled, saved)
+    HecklePrism.class_variable_set(:@@unsettled, saved)
   end
 
   # Once settle could not clean up after a run, no later mutant in the
@@ -833,7 +833,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_real_reporter_does_not_cheer_when_mutants_were_not_run
-    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { flunk "no run expected" }
+    heckler = scripted("HeckleSubjects", "pair", [:lit], HecklePrism::Reporter.new) { flunk "no run expected" }
 
     out, _err = with_unsettled("a test thread could not be stopped") { capture_io { heckler.validate } }
 
@@ -855,15 +855,15 @@ class TestHeckle < Minitest::Test
     assert_equal({ timeout: "timed out", memory: "ran out of memory", crash: "crashed",
                    install: "failed to install", syntax: "had a syntax error", canceled: "canceled",
                    unsettled: "not run" },
-                 Heckle::NOT_JUDGED)
-    assert_equal "", Heckle::Reporter.tally({})
-    assert_equal "2 timed out", Heckle::Reporter.tally({ timeout: 2 })
+                 HecklePrism::NOT_JUDGED)
+    assert_equal "", HecklePrism::Reporter.tally({})
+    assert_equal "2 timed out", HecklePrism::Reporter.tally({ timeout: 2 })
     assert_equal "2 timed out, 1 crashed, 3 canceled",
-                 Heckle::Reporter.tally({ canceled: 3, crash: 1, timeout: 2, memory: 0 })
+                 HecklePrism::Reporter.tally({ canceled: 3, crash: 1, timeout: 2, memory: 0 })
   end
 
   def test_reporter_totals_add_a_line_for_mutants_not_judged
-    reporter = Heckle::Reporter.new
+    reporter = HecklePrism::Reporter.new
 
     assert_output("1 of 4 mutants survived\n\n") { reporter.mutant_totals(1, 4) }
     assert_output("1 of 4 mutants survived\n\n") { reporter.mutant_totals(1, 4, {}) }
@@ -876,14 +876,14 @@ class TestHeckle < Minitest::Test
   # The Reporter warns in the words the warning always used, then shows
   # the mutant as a survivor's diff shows it.
   def test_reporter_not_judged_warns_then_shows_the_diff
-    out, _err = capture_io { Heckle::Reporter.new.not_judged(:timeout, TIMED_OUT, "a\nb\n", "a\nc\n") }
+    out, _err = capture_io { HecklePrism::Reporter.new.not_judged(:timeout, TIMED_OUT, "a\nb\n", "a\nc\n") }
 
     assert_equal "#{'!' * 70}\n!!! #{TIMED_OUT}\n#{'!' * 70}\n\n" \
                  "--- original\n+++ mutation\n a\n-b\n+c\n\n", out
   end
 
   def test_real_reporter_shows_a_timed_out_mutant
-    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) do |h|
+    heckler = scripted("HeckleSubjects", "pair", [:lit], HecklePrism::Reporter.new) do |h|
       sleep 5 if h.count == 1
       false
     end
@@ -935,7 +935,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_real_reporter_output
-    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { |h| h.count == 1 }
+    heckler = scripted("HeckleSubjects", "pair", [:lit], HecklePrism::Reporter.new) { |h| h.count == 1 }
 
     out, _err = capture_io { heckler.validate }
 
@@ -949,7 +949,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_reporter_warning_and_info_text
-    reporter = Heckle::Reporter.new
+    reporter = HecklePrism::Reporter.new
 
     assert_output("#{'!' * 70}\n!!! careful\n#{'!' * 70}\n\n") { reporter.warning "careful" }
     assert_output("#{'*' * 70}\n***  note\n#{'*' * 70}\n\n") { reporter.info "note" }
@@ -957,31 +957,31 @@ class TestHeckle < Minitest::Test
   end
 
   def test_reporter_diff_has_no_hunk_header
-    out, _err = capture_io { Heckle::Reporter.new.diff("a\nb\n", "a\nc\n") }
+    out, _err = capture_io { HecklePrism::Reporter.new.diff("a\nb\n", "a\nc\n") }
 
     assert_equal "--- original\n+++ mutation\n a\n-b\n+c\n\n", out
   end
 
   def test_reporter_replacing_text
-    out, _err = capture_io { Heckle::Reporter.new.replacing("K", :m, "a\nb\n", "a\nc\n") }
+    out, _err = capture_io { HecklePrism::Reporter.new.replacing("K", :m, "a\nb\n", "a\nc\n") }
 
     assert_equal "Replacing K#m with:\n\n--- original\n+++ mutation\n a\n-b\n+c\n\n", out
   end
 
   def test_reporter_test_failures_only_in_debug
-    debug = Heckle.debug
-    reporter = Heckle::Reporter.new
+    debug = HecklePrism.debug
+    reporter = HecklePrism::Reporter.new
 
-    Heckle.debug = false
+    HecklePrism.debug = false
     assert_output("") { reporter.report_test_failures }
-    Heckle.debug = true
+    HecklePrism.debug = true
     assert_output("Tests failed -- this is good\n") { reporter.report_test_failures }
   ensure
-    Heckle.debug = debug
+    HecklePrism.debug = debug
   end
 
   def test_real_reporter_totals_without_survivors
-    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) { false }
+    heckler = scripted("HeckleSubjects", "pair", [:lit], HecklePrism::Reporter.new) { false }
 
     out, _err = capture_io { heckler.validate }
 
@@ -989,7 +989,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_thick_skin_has_no_totals_line
-    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, Heckle::Reporter.new) { flunk "no run expected" }
+    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
 
     out, _err = capture_io { heckler.validate }
 
@@ -1010,7 +1010,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_real_reporter_totals_with_a_timeout
-    heckler = scripted("HeckleSubjects", "pair", [:lit], Heckle::Reporter.new) do |h|
+    heckler = scripted("HeckleSubjects", "pair", [:lit], HecklePrism::Reporter.new) do |h|
       sleep 5 if h.count == 1
       false
     end
@@ -1021,7 +1021,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_real_reporter_thick_skin_names_the_class
-    heckler = scripted("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, Heckle::Reporter.new) { flunk "no run expected" }
+    heckler = scripted("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, HecklePrism::Reporter.new) { flunk "no run expected" }
 
     out, _err = capture_io { heckler.validate }
 
@@ -1047,22 +1047,22 @@ class TestHeckle < Minitest::Test
 
   def test_mutatable_nodes
     assert_equal %i[call cvasgn false gasgn iasgn if iter lasgn lit str true until while],
-                 Heckle::MUTATABLE_NODES
-    assert_equal %i[if until while], Heckle::BRANCH_NODES
-    assert_equal %i[cvasgn gasgn iasgn lasgn], Heckle::ASGN_NODES.sort
-    assert_equal({ dasgn: :lasgn, dasgn_curr: :lasgn }, Heckle::NODE_ALIASES)
+                 HecklePrism::MUTATABLE_NODES
+    assert_equal %i[if until while], HecklePrism::BRANCH_NODES
+    assert_equal %i[cvasgn gasgn iasgn lasgn], HecklePrism::ASGN_NODES.sort
+    assert_equal({ dasgn: :lasgn, dasgn_curr: :lasgn }, HecklePrism::NODE_ALIASES)
   end
 
   def test_public_surface
     %i[count klass klass_name method_name failures not_judged].each do |name|
-      assert Heckle.public_method_defined?(name), "#{name} should be public"
+      assert HecklePrism.public_method_defined?(name), "#{name} should be public"
     end
     %i[count= klass= klass_name= method_name=].each do |name|
-      refute Heckle.method_defined?(name), "#{name} should not exist"
+      refute HecklePrism.method_defined?(name), "#{name} should not exist"
     end
-    assert Heckle.public_method_defined?(:failures=)
+    assert HecklePrism.public_method_defined?(:failures=)
     %i[run_tests record_passing_mutation].each do |name|
-      assert Heckle.private_method_defined?(name), "#{name} should be private"
+      assert HecklePrism.private_method_defined?(name), "#{name} should be private"
     end
   end
 
@@ -1100,67 +1100,67 @@ class TestHeckle < Minitest::Test
   end
 
   def test_unknown_class
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleDummy::Nope", "foo") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy::Nope", "foo") }
 
     assert_equal "HeckleDummy::Nope#foo: no such class HeckleDummy::Nope", error.message
   end
 
   # Object's constants are reachable from any class by inheritance.
   def test_class_path_does_not_resolve_through_ancestors
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjects::HeckleDummy", "uses_literal") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjects::HeckleDummy", "uses_literal") }
 
     assert_equal "HeckleSubjects::HeckleDummy#uses_literal: no such class HeckleSubjects::HeckleDummy",
                  error.message
   end
 
   def test_non_module_constant_is_not_a_class
-    error = assert_raises(Heckle::SourceNotFound) { heckle("Heckle::VERSION", "foo") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HecklePrism::VERSION", "foo") }
 
-    assert_equal "Heckle::VERSION#foo: Heckle::VERSION is not a class or module", error.message
+    assert_equal "HecklePrism::VERSION#foo: HecklePrism::VERSION is not a class or module", error.message
   end
 
   def test_unknown_method
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleDummy", "nope") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "nope") }
 
     assert_includes error.message, "HeckleDummy#nope"
     assert_includes error.message, "no such method"
   end
 
   def test_unknown_class_method
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleDummy", "self.uses_literal") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "self.uses_literal") }
 
     assert_includes error.message, "HeckleDummy#self.uses_literal"
   end
 
   def test_define_method_has_no_usable_source
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjects", "defined_dynamically") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjects", "defined_dynamically") }
 
     assert_includes error.message, "HeckleSubjects#defined_dynamically"
     assert_includes error.message, "no def"
   end
 
   def test_attr_accessor_has_no_usable_source
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleDummy", "names") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleDummy", "names") }
 
     assert_includes error.message, "HeckleDummy#names"
   end
 
   def test_c_method_has_no_source_location
-    error = assert_raises(Heckle::SourceNotFound) { heckle("String", "upcase") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("String", "upcase") }
 
     assert_includes error.message, "String#upcase"
     assert_includes error.message, "no source location"
   end
 
   def test_inherited_method_is_not_the_class_own
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjectsChild", "pair") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjectsChild", "pair") }
 
     assert_equal "HeckleSubjectsChild#pair: no such method in HeckleSubjectsChild itself; " \
                  "it is defined by HeckleSubjects", error.message
   end
 
   def test_unreadable_source_file
-    error = assert_raises(Heckle::SourceNotFound) { heckle("HeckleSubjectsEvaled", "gone") }
+    error = assert_raises(HecklePrism::SourceNotFound) { heckle("HeckleSubjectsEvaled", "gone") }
 
     assert_equal "HeckleSubjectsEvaled#gone: source file /nonexistent/heckle_gone.rb is not readable",
                  error.message
@@ -1206,13 +1206,13 @@ class TestHeckle < Minitest::Test
   end
 
   def test_mutations_filtered_by_branch_nodes
-    kinds = heckle("HeckleDummy", "uses_many_things", Heckle::BRANCH_NODES).mutations.map(&:kind)
+    kinds = heckle("HeckleDummy", "uses_many_things", HecklePrism::BRANCH_NODES).mutations.map(&:kind)
 
     assert_equal %i[while until if], kinds
   end
 
   def test_mutations_filtered_by_asgn_nodes
-    kinds = heckle("HeckleDummy", "uses_many_things", Heckle::ASGN_NODES).mutations.map(&:kind)
+    kinds = heckle("HeckleDummy", "uses_many_things", HecklePrism::ASGN_NODES).mutations.map(&:kind)
 
     assert_equal %i[lasgn lasgn], kinds
   end
@@ -1234,15 +1234,15 @@ class TestHeckle < Minitest::Test
   # The mutant that does not parse comes from the `{foo:}` shorthand.
   def test_unparsable_mutants_are_dropped
     shorthand = File.expand_path("fixtures/heckle_shorthand.rb", __dir__)
-    def_node = Heckle::MethodFinder.new(File.read(shorthand)).find("HeckleShorthand", "label_shorthand").def_node
-    raw = Heckle::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
+    def_node = HecklePrism::MethodFinder.new(File.read(shorthand)).find("HeckleShorthand", "label_shorthand").def_node
+    raw = HecklePrism::Mutator.new(TestHeckler.allocate).mutations_for(def_node)
 
     assert_equal [:lit], raw.map(&:kind)
     assert_empty heckle("HeckleShorthand", "label_shorthand", [:lit]).mutations
   end
 
   def test_random_helpers
-    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
 
     50.times do
       number = heckler.rand_number
@@ -1263,7 +1263,7 @@ class TestHeckle < Minitest::Test
 
   # Bounds reached in 1000 draws with probability above 1 - 1e-30.
   def test_rand_number_range_and_symbol_cover_their_spans
-    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
     numbers = Array.new(1000) { heckler.rand_number }
     ranges = Array.new(1000) { heckler.rand_range }
     symbols = Array.new(1000) { heckler.rand_symbol.to_s }
@@ -1276,7 +1276,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_rand_string_is_printable_ascii
-    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
     strings = Array.new(1000) { heckler.rand_string }
 
     strings.each { |string| assert_match(/\A[ -~]{0,49}\z/, string) }
@@ -1284,7 +1284,7 @@ class TestHeckle < Minitest::Test
   end
 
   def test_drawn_strings_make_valid_string_and_regex_mutants
-    heckler = Heckle.new("HeckleDummy", "uses_literal")
+    heckler = HecklePrism.new("HeckleDummy", "uses_literal")
     source = "def m\n  [\"x\", /y/]\nend\n"
     def_node = Prism.parse(source).value.statements.body.first
     drawn = []
@@ -1293,7 +1293,7 @@ class TestHeckle < Minitest::Test
 
     200.times do
       drawn.clear
-      string_mutant, regex_mutant = Heckle::Mutator.new(randomizer).mutations_for(def_node)
+      string_mutant, regex_mutant = HecklePrism::Mutator.new(randomizer).mutations_for(def_node)
                                                                     .map { |mutation| mutation.apply(source) }
 
       [string_mutant, regex_mutant].each { |mutant| assert Prism.parse(mutant).success?, mutant }
@@ -1395,11 +1395,11 @@ class TestHeckle < Minitest::Test
   end
 
   def with_fork(value = true)
-    saved = Heckle.fork?
-    Heckle.fork = value
+    saved = HecklePrism.fork?
+    HecklePrism.fork = value
     yield
   ensure
-    Heckle.fork = saved
+    HecklePrism.fork = saved
   end
 
   def forked(klass_name, method_name, nodes, reporter = RecordingReporter.new,
@@ -1425,15 +1425,15 @@ class TestHeckle < Minitest::Test
     reader.close
   end
 
-  MB = Heckle::Memory::MB
+  MB = HecklePrism::Memory::MB
   LIB = File.expand_path("../lib", __dir__)
 
   def with_memory_limit(bytes)
-    saved = Heckle.memory_limit
-    Heckle.memory_limit = bytes
+    saved = HecklePrism.memory_limit
+    HecklePrism.memory_limit = bytes
     yield
   ensure
-    Heckle.memory_limit = saved
+    HecklePrism.memory_limit = saved
   end
 
   def proc_status(key)
@@ -1441,42 +1441,42 @@ class TestHeckle < Minitest::Test
   end
 
   def test_memory_limit_is_off_by_default
-    out, err, status = Open3.capture3(RbConfig.ruby, "-I", LIB, "-e", 'require "heckle"; p Heckle.memory_limit')
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", LIB, "-e", 'require "heckle_prism"; p HecklePrism.memory_limit')
 
     assert status.success?, err
     assert_equal "nil\n", out
   end
 
   def test_memory_default_limit
-    assert_equal 1124 * MB, Heckle::Memory.default_limit(100 * MB)
-    assert_equal 4096 * MB, Heckle::Memory.default_limit(2048 * MB)
+    assert_equal 1124 * MB, HecklePrism::Memory.default_limit(100 * MB)
+    assert_equal 4096 * MB, HecklePrism::Memory.default_limit(2048 * MB)
   end
 
   def test_memory_resident_reads_this_process
     skip "no /proc" unless File.exist?("/proc/self/status")
 
-    assert_equal :proc, Heckle::Memory.source
-    assert_in_delta proc_status("VmRSS"), Heckle::Memory.resident, 20 * MB
-    assert_in_delta proc_status("VmRSS"), Heckle::Memory.resident(Process.pid), 20 * MB
+    assert_equal :proc, HecklePrism::Memory.source
+    assert_in_delta proc_status("VmRSS"), HecklePrism::Memory.resident, 20 * MB
+    assert_in_delta proc_status("VmRSS"), HecklePrism::Memory.resident(Process.pid), 20 * MB
   end
 
   def test_memory_resident_through_ps_agrees
-    saved = Heckle::Memory.source
-    Heckle::Memory.source = :ps
-    by_ps = Heckle::Memory.resident
-    Heckle::Memory.source = saved
+    saved = HecklePrism::Memory.source
+    HecklePrism::Memory.source = :ps
+    by_ps = HecklePrism::Memory.resident
+    HecklePrism::Memory.source = saved
     skip "no ps" unless by_ps
 
-    assert_in_delta Heckle::Memory.resident, by_ps, 20 * MB
+    assert_in_delta HecklePrism::Memory.resident, by_ps, 20 * MB
   ensure
-    Heckle::Memory.source = saved
+    HecklePrism::Memory.source = saved
   end
 
   def test_memory_resident_of_a_reaped_process_is_nil
     pid = Process.spawn(RbConfig.ruby, "-e", "")
     Process.wait(pid)
 
-    assert_nil Heckle::Memory.resident(pid)
+    assert_nil HecklePrism::Memory.resident(pid)
   end
 
   # A large allocation crossing the backstop fails at once; a later call
@@ -1485,18 +1485,18 @@ class TestHeckle < Minitest::Test
   def test_memory_backstop_fails_a_large_allocation
     skip "no /proc" unless File.exist?("/proc/self/status")
     script = <<~RUBY
-      require "heckle"
-      limit = Heckle::Memory.resident + 50 * Heckle::Memory::MB
+      require "heckle_prism"
+      limit = HecklePrism::Memory.resident + 50 * HecklePrism::Memory::MB
       _soft, hard = Process.getrlimit(:DATA)
-      Heckle::Memory.backstop(limit, 0)
+      HecklePrism::Memory.backstop(limit, 0)
       soft = Process.getrlimit(:DATA)[0]
       begin
-        "x" * (200 * Heckle::Memory::MB)
+        "x" * (200 * HecklePrism::Memory::MB)
         $stdout.syswrite "allocated\\n"
       rescue NoMemoryError
         $stdout.syswrite "NoMemoryError\\n"
       end
-      Heckle::Memory.backstop(limit + 500 * Heckle::Memory::MB, 0)
+      HecklePrism::Memory.backstop(limit + 500 * HecklePrism::Memory::MB, 0)
       $stdout.syswrite [Process.getrlimit(:DATA) == [soft, hard], soft < hard].inspect + "\\n"
       exit!(0)
     RUBY
@@ -1509,20 +1509,20 @@ class TestHeckle < Minitest::Test
   # ends the process with a report, as polling does.
   def test_in_process_no_memory_error_under_a_limit_ends_the_process
     script = <<~RUBY
-      require "heckle"
+      require "heckle_prism"
       require "fixtures/heckle_subjects"
-      class Raiser < Heckle
+      class Raiser < HecklePrism
         def tests_pass?
           raise NoMemoryError, "failed to allocate memory"
         end
       end
-      Heckle.memory_limit = 500 * Heckle::Memory::MB
+      HecklePrism.memory_limit = 500 * HecklePrism::Memory::MB
       Raiser.new("HeckleSubjects", "answer", [:lit]).validate
       puts "not reached"
     RUBY
     run = BoundedProcess.capture3(RbConfig.ruby, "-I", LIB, "-I", __dir__, "-e", script, seconds: 30)
 
-    assert_equal Heckle::Watchdog::EXIT_STATUS, run.status.exitstatus
+    assert_equal HecklePrism::Watchdog::EXIT_STATUS, run.status.exitstatus
     refute_includes run.out, "not reached"
     assert_match(/\Aheckle: HeckleSubjects#answer: the tests went over the memory limit of 500 MB\n\(an allocation failed/,
                  run.err)
@@ -1549,7 +1549,7 @@ class TestHeckle < Minitest::Test
       false
     end
 
-    limit = Heckle::Memory.resident + 100 * MB
+    limit = HecklePrism::Memory.resident + 100 * MB
     result = with_memory_limit(limit) { with_timeout(20) { with_fork { heckler.validate } } }
 
     assert_equal true, result
@@ -1585,7 +1585,7 @@ class TestHeckle < Minitest::Test
     end
     before = Process.getrlimit(:DATA)
 
-    with_memory_limit(Heckle::Memory.resident + 100 * MB) { with_fork { heckler.validate } }
+    with_memory_limit(HecklePrism::Memory.resident + 100 * MB) { with_fork { heckler.validate } }
 
     child_soft = Integer(drain(reader, writer))
     assert_operator child_soft, :<, before[0]
@@ -1595,7 +1595,7 @@ class TestHeckle < Minitest::Test
 
   def test_fork_setting_is_off_by_default
     lib = File.expand_path("../lib", __dir__)
-    out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib, "-e", 'require "heckle"; p Heckle.fork?')
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib, "-e", 'require "heckle_prism"; p HecklePrism.fork?')
 
     assert status.success?, err
     assert_equal "false\n", out
@@ -1631,7 +1631,7 @@ class TestHeckle < Minitest::Test
 
   def test_fork_thick_skin_forks_nothing
     reporter = RecordingReporter.new
-    heckler = forked("HeckleDummy", "uses_nothing", Heckle::MUTATABLE_NODES, reporter) { flunk }
+    heckler = forked("HeckleDummy", "uses_nothing", HecklePrism::MUTATABLE_NODES, reporter) { flunk }
 
     assert_nil with_fork { heckler.validate }
     assert_equal [[:no_mutations, "HeckleDummy", :uses_nothing]], reporter.calls
