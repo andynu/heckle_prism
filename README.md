@@ -34,9 +34,12 @@ each.
 
 ## Description
 
-heckle_prism is a mutation tester. It modifies your code and runs your tests to make sure they fail. The idea is that if code can be changed and your tests don't notice, either that code isn't being covered or it doesn't do anything.
-
-It's like hiring a white-hat hacker to try to break into your server and making sure you detect it. You learn the most by trying to break things and watching the outcome in an act of unit test sadism.
+heckle_prism changes one method at a time in small ways, such as
+flipping a condition, replacing a literal or removing a call, and runs
+your Minitest tests against each changed version, called a mutant. A
+mutant the tests fail on is killed. A mutant they pass on has survived,
+and each survivor marks code the tests do not check: either nothing
+covers it, or what it does makes no difference to any assertion.
 
 ## Features and problems
 
@@ -98,8 +101,8 @@ lib and test on the load path, so your tests must require the code they
 test. The unmutated tests are run once first and must pass.
 
 ```
-% heckle_prism Doubler                  # every method Doubler defines
-% heckle_prism Doubler double           # one instance method
+% heckle_prism Squarer                  # every method Squarer defines
+% heckle_prism Squarer square           # one instance method
 % heckle_prism Tally self.start         # one class method
 % heckle_prism Name::Spaced::Class meth # nested names are fine
 ```
@@ -130,7 +133,7 @@ For example, to heckle only the branches of one method against one test
 file:
 
 ```
-% heckle_prism Doubler double -b -t test/test_doubler_with_a_number.rb
+% heckle_prism Squarer square -b -t test/test_squarer_with_a_number.rb
 ```
 
 Each mutant the tests did not catch is printed as a diff against the
