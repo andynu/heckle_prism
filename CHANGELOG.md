@@ -12,6 +12,18 @@ project's History.txt recorded them.
 
 ## [Unreleased]
 
+### Added
+
+- LICENSE. Code written for heckle_prism is dedicated to the public
+  domain under CC0 1.0; the parts from heckle stay under its MIT License.
+- A Provenance section in the README.
+
+### Changed
+
+- README.txt is now README.md, and History.txt is now this file.
+- The gemspec names heckle_prism's author and homepage instead of
+  heckle's.
+
 ## [4.0.0] - 2026-11-16
 
 ### Changed
