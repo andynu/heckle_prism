@@ -3,7 +3,7 @@ Memory limit set to N MB.
 Initial tests pass. Let's rumble.
 
 **********************************************************************
-***  Doubler#double loaded with 5 possible mutations
+***  Squarer#square loaded with 5 possible mutations
 **********************************************************************
 
 5 mutations remaining...
@@ -11,15 +11,27 @@ Initial tests pass. Let's rumble.
 3 mutations remaining...
 2 mutations remaining...
 1 mutations remaining...
-No mutants survived. Cool!
 
-0 of 5 mutants survived
+The following mutations didn't cause test failures:
+
+--- original
++++ mutation
+ def square(n)
+   if n.is_a?(Numeric)
+     n ** 2
+   else
+-    "not a number"
++
+   end
+ end
+
+1 of 5 mutants survived
 
 Heckle Results:
 
-Passed    :   1
-Failed    :   0
+Passed    :   0
+Failed    :   1
 Thick Skin:   0
-Mutants   :   5 killed, 0 survived
+Mutants   :   4 killed, 1 survived
 
-All heckling was thwarted! YAY!!!
+Improve the tests and try again.

@@ -14,7 +14,7 @@ class TestTestsPass < Minitest::Test
   # at_exit handler, including any Minitest would register.
   PRELUDE = <<~RUBY
     require "heckle_prism"
-    require "doubler"
+    require "squarer"
     $runs = 0
     at_exit { puts "runs=\#{$runs}" }
     Minitest::Test.prepend(Module.new { def before_setup; $runs += 1; super; end })
@@ -35,21 +35,21 @@ class TestTestsPass < Minitest::Test
   def test_passing_suite
     assert_drive "true\nruns=3\n", <<~RUBY
       HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
-      p HecklePrism.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Squarer", "square").tests_pass?
     RUBY
   end
 
   def test_failing_suite
     assert_drive "false\nruns=1\n", <<~RUBY
-      HecklePrism.load_tests(["broken/broken_doubler_test.rb"])
-      p HecklePrism.new("Doubler", "double").tests_pass?
+      HecklePrism.load_tests(["broken/broken_squarer_test.rb"])
+      p HecklePrism.new("Squarer", "square").tests_pass?
     RUBY
   end
 
   def test_repeated_calls_follow_the_code_under_test
     assert_drive "[true, false, true]\nruns=9\n", <<~RUBY
       HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
-      heckle = HecklePrism.new("Doubler", "double", [:if])
+      heckle = HecklePrism.new("Squarer", "square", [:if])
       results = [heckle.tests_pass?]
       heckle.install(heckle.mutations.first)
       results << heckle.tests_pass?
@@ -64,8 +64,8 @@ class TestTestsPass < Minitest::Test
   # repeat by chance with probability 200**-20.
   def test_suite_runs_do_not_repeat_random_replacements
     assert_drive "false\nruns=2\n", <<~RUBY
-      HecklePrism.load_tests(["test/test_doubler_with_a_number.rb", "test/test_helper.rb"])
-      draws = [HecklePrism.new("Doubler", "double"), HecklePrism.new("Halver", "halve")].map do |heckle|
+      HecklePrism.load_tests(["test/test_squarer_with_a_number.rb", "test/test_helper.rb"])
+      draws = [HecklePrism.new("Squarer", "square"), HecklePrism.new("Halver", "halve")].map do |heckle|
         heckle.tests_pass?
         Array.new(20) { heckle.rand_number }
       end
@@ -78,7 +78,7 @@ class TestTestsPass < Minitest::Test
       class SkippingTest < Minitest::Test
         def test_skipped; skip "later"; end
       end
-      p HecklePrism.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Squarer", "square").tests_pass?
     RUBY
   end
 
@@ -87,7 +87,7 @@ class TestTestsPass < Minitest::Test
       class NoisyTest < Minitest::Test
         def test_noise; puts "out"; warn "err"; $stderr.puts "err"; end
       end
-      p HecklePrism.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Squarer", "square").tests_pass?
     RUBY
   end
 
@@ -97,7 +97,7 @@ class TestTestsPass < Minitest::Test
         def test_noise; puts "out"; end
       end
       HecklePrism.debug = true
-      HecklePrism.new("Doubler", "double").tests_pass?
+      HecklePrism.new("Squarer", "square").tests_pass?
     RUBY
 
     assert status.success?
@@ -125,7 +125,7 @@ class TestTestsPass < Minitest::Test
       end
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       begin
-        Timeout.timeout(0.2, HecklePrism::Timeout) { HecklePrism.new("Doubler", "double").tests_pass? }
+        Timeout.timeout(0.2, HecklePrism::Timeout) { HecklePrism.new("Squarer", "square").tests_pass? }
       rescue HecklePrism::Timeout => e
         p e.class
       end
@@ -333,7 +333,7 @@ class TestTestsPass < Minitest::Test
     assert_drive "true\nnil\ntrue\nruns=3\n", <<~RUBY
       HecklePrism.load_tests(Dir.glob("test/test_*.rb"))
       executor = Minitest.parallel_executor
-      p HecklePrism.new("Doubler", "double").tests_pass?
+      p HecklePrism.new("Squarer", "square").tests_pass?
       p HecklePrism.settle
       p Minitest.parallel_executor.equal?(executor)
     RUBY

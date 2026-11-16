@@ -1,9 +1,9 @@
 Timeout set to 5 seconds.
 Memory limit set to N MB.
-Initial tests failed but you forced things. Let's rumble.
+Initial tests pass. Let's rumble.
 
 **********************************************************************
-***  Doubler#double loaded with 5 possible mutations
+***  Squarer#square loaded with 5 possible mutations
 **********************************************************************
 
 5 mutations remaining...

@@ -9,9 +9,9 @@ require "bounded_process"
 class TestHecklePrismRunner < Minitest::Test
   BIN = File.expand_path("../bin/heckle_prism", __dir__)
   PROJECT = File.expand_path("fixtures/minitest_project", __dir__)
-  PARTIAL = %w[--tests test/test_doubler_with_a_number.rb].freeze
+  PARTIAL = %w[--tests test/test_squarer_with_a_number.rb].freeze
   TALLY = %w[--tests test/tally_test.rb].freeze
-  BROKEN = %w[--tests broken/broken_doubler_test.rb].freeze
+  BROKEN = %w[--tests broken/broken_squarer_test.rb].freeze
 
   def heckle(*args)
     Open3.capture3(RbConfig.ruby, BIN, *args, chdir: PROJECT)
@@ -36,29 +36,29 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_full_coverage
-    out, err, status = heckle("Doubler", "double")
+    out, err, status = heckle("Squarer", "square")
 
     assert_equal "", err
     assert_includes out, "Initial tests pass. Let's rumble."
-    assert_includes out, "***  Doubler#double loaded with 5 possible mutations"
+    assert_includes out, "***  Squarer#square loaded with 5 possible mutations"
     assert_includes out, "No mutants survived. Cool!\n\n0 of 5 mutants survived\n\n"
     assert_equal 0, status.exitstatus
   end
 
   def test_partial_coverage
-    out, err, status = heckle("Doubler", "double", *PARTIAL)
+    out, err, status = heckle("Squarer", "square", *PARTIAL)
 
     assert_equal "", err
     assert_includes out, "The following mutations didn't cause test failures:"
     assert_includes out, "--- original\n+++ mutation\n"
-    assert_includes out, "\n def double x\n   if Numeric === x\n     x * 2\n   else\n-    \"NaN\"\n"
+    assert_includes out, "\n def square(n)\n   if n.is_a?(Numeric)\n     n ** 2\n   else\n-    \"not a number\"\n"
     refute_includes out, "No mutants survived."
     assert_match(/^ end\n\n1 of 5 mutants survived\n\nHeckle Results:\n/, out)
     assert_equal 1, status.exitstatus
   end
 
   def test_whole_class_summary
-    out, _err, status = heckle("Doubler")
+    out, _err, status = heckle("Squarer")
 
     assert_includes out, "No mutants survived."
     assert_includes out, <<~OUT
@@ -75,7 +75,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_whole_class_summary_with_survivor
-    out, _err, status = heckle("Doubler", *PARTIAL)
+    out, _err, status = heckle("Squarer", *PARTIAL)
 
     assert_includes out, "Failed    :   1\n"
     assert_includes out, "Improve the tests and try again."
@@ -135,7 +135,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_nodes_option_limits_mutations
-    out, _err, status = heckle("Doubler", "double", "-n", "if")
+    out, _err, status = heckle("Squarer", "square", "-n", "if")
 
     assert_includes out, "Mutating nodes: [:if]"
     assert_includes out, "loaded with 1 possible mutations"
@@ -143,7 +143,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_exclude_nodes_option
-    out, _err, _status = heckle("Doubler", "double", "-x", "if,str")
+    out, _err, _status = heckle("Squarer", "square", "-x", "if,str")
 
     assert_includes out, "Mutating without nodes: [:if, :str]"
     assert_includes out, "loaded with 3 possible mutations"
@@ -156,7 +156,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_branches_option
-    out, _err, _status = heckle("Doubler", "double", "-b")
+    out, _err, _status = heckle("Squarer", "square", "-b")
 
     assert_includes out, "!!! Heckling branches only"
     assert_includes out, "loaded with 1 possible mutations"
@@ -169,28 +169,28 @@ class TestHecklePrismRunner < Minitest::Test
     assert_includes out, "loaded with 2 possible mutations"
     assert_equal 0, status.exitstatus
 
-    out, _err, status = heckle("Doubler", "double", "--assignments")
-    assert_includes out, "Doubler#double has a thick skin."
+    out, _err, status = heckle("Squarer", "square", "--assignments")
+    assert_includes out, "Squarer#square has a thick skin."
     assert_equal 0, status.exitstatus
   end
 
   def test_unknown_class
-    assert_aborts "Unknown class: Nope", "Nope", "double"
+    assert_aborts "Unknown class: Nope", "Nope", "square"
     assert_aborts "Unknown class: Nope", "Nope"
-    assert_aborts "Unknown class: Doubler::Nope", "Doubler::Nope"
+    assert_aborts "Unknown class: Squarer::Nope", "Squarer::Nope"
   end
 
   def test_unknown_method
-    assert_aborts "Doubler#nope: no such method", "Doubler", "nope"
-    assert_aborts "Doubler#self.nope: no such method", "Doubler", "self.nope"
+    assert_aborts "Squarer#nope: no such method", "Squarer", "nope"
+    assert_aborts "Squarer#self.nope: no such method", "Squarer", "self.nope"
   end
 
   def test_unknown_node_kind
-    assert_aborts "Unknown mutation kind: bogus", "Doubler", "double", "-n", "if,bogus"
+    assert_aborts "Unknown mutation kind: bogus", "Squarer", "square", "-n", "if,bogus"
   end
 
   def test_no_matching_test_files
-    assert_aborts "No test files match nothing/*.rb", "Doubler", "double", "-t", "nothing/*.rb"
+    assert_aborts "No test files match nothing/*.rb", "Squarer", "square", "-t", "nothing/*.rb"
   end
 
   def test_missing_class_argument
@@ -201,7 +201,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_unknown_option
-    _out, err, status = heckle("Doubler", "--bogus")
+    _out, err, status = heckle("Squarer", "--bogus")
 
     refute status.success?
     assert_includes err, "invalid option: --bogus"
@@ -210,13 +210,13 @@ class TestHecklePrismRunner < Minitest::Test
 
   def test_failing_initial_run_aborts
     out = assert_aborts "Initial run of tests failed... fix and run heckle_prism again",
-                        "Doubler", "double", *BROKEN
+                        "Squarer", "square", *BROKEN
 
     refute_includes out, "loaded with"
   end
 
   def test_force_proceeds_after_failing_initial_run
-    out, _err, status = heckle("Doubler", "double", "--force", *BROKEN)
+    out, _err, status = heckle("Squarer", "square", "--force", *BROKEN)
 
     assert_includes out, "Initial tests failed but you forced things. Let's rumble."
     assert_includes out, "No mutants survived."
@@ -496,7 +496,7 @@ class TestHecklePrismRunner < Minitest::Test
   # Resident memory after the unmutated run, plus the larger of 1 GiB and
   # that amount again.
   def test_memory_limit_default
-    out, err, status = heckle("Doubler", "double", "-n", "if")
+    out, err, status = heckle("Squarer", "square", "-n", "if")
 
     assert_equal "", err
     limit = memory_limit_line(out)[/\AMemory limit set to (\d+) MB\.\z/, 1]
@@ -514,14 +514,14 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_memory_limit_must_be_a_whole_number_of_megabytes
-    assert_aborts "invalid argument: --memory-limit lots", "Doubler", "--memory-limit", "lots"
-    assert_aborts "invalid argument: --memory-limit -1", "Doubler", "--memory-limit", "-1"
+    assert_aborts "invalid argument: --memory-limit lots", "Squarer", "--memory-limit", "lots"
+    assert_aborts "invalid argument: --memory-limit -1", "Squarer", "--memory-limit", "-1"
   end
 
   def test_memory_limit_not_enforced_where_memory_cannot_be_read
     script = "require 'heckle_prism'; HecklePrism::Memory.source = nil; load #{BIN.dump}"
     out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__),
-                                      "-e", script, "Doubler", "double", chdir: PROJECT)
+                                      "-e", script, "Squarer", "square", chdir: PROJECT)
 
     assert_equal "", err
     assert_equal "Memory limit not enforced: resident memory cannot be read on this platform.",
@@ -533,7 +533,7 @@ class TestHecklePrismRunner < Minitest::Test
 
   # One pipe for both streams, as with 2>&1 into a file.
   def test_stdout_is_not_reordered_against_stderr
-    out, status = Open3.capture2e(RbConfig.ruby, BIN, "Doubler", "double", "-T", "7", *BROKEN, chdir: PROJECT)
+    out, status = Open3.capture2e(RbConfig.ruby, BIN, "Squarer", "square", "-T", "7", *BROKEN, chdir: PROJECT)
 
     refute status.success?
     assert_equal ["Setting timeout at 7 seconds.", "Initial run of tests failed... fix and run heckle_prism again"],
@@ -543,19 +543,19 @@ class TestHecklePrismRunner < Minitest::Test
   # "abc".to_i is 0, and a zero timeout meant no timeout in-process and an
   # instant one in fork mode.
   def test_timeout_must_be_a_positive_whole_number_of_seconds
-    assert_aborts "invalid argument: -T 0", "Doubler", "double", "-T", "0"
-    assert_aborts "invalid argument: --timeout -3", "Doubler", "double", "--timeout", "-3"
-    assert_aborts "invalid argument: -T soon", "Doubler", "double", "-T", "soon"
+    assert_aborts "invalid argument: -T 0", "Squarer", "square", "-T", "0"
+    assert_aborts "invalid argument: --timeout -3", "Squarer", "square", "--timeout", "-3"
+    assert_aborts "invalid argument: -T soon", "Squarer", "square", "-T", "soon"
   end
 
   def test_timeout_guess
-    out, _err, _status = heckle("Doubler", "double", "-n", "if")
+    out, _err, _status = heckle("Squarer", "square", "-n", "if")
 
     assert_includes out, "Timeout set to 5 seconds."
   end
 
   def test_timeout_option
-    out, _err, _status = heckle("Doubler", "double", "-n", "if", "-T", "7")
+    out, _err, _status = heckle("Squarer", "square", "-n", "if", "-T", "7")
 
     assert_includes out, "Setting timeout at 7 seconds."
     assert_includes out, "Timeout set to 7 seconds."
@@ -615,7 +615,7 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_default_patterns_skip_files_outside_test
-    out, _err, status = heckle("Doubler", "double")
+    out, _err, status = heckle("Squarer", "square")
 
     assert_includes out, "Initial tests pass."
     assert_equal 0, status.exitstatus
@@ -632,10 +632,10 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_verbose
-    out, _err, _status = heckle("Doubler", "double", "-n", "if", "-v", "-t", "test/test_doubler_*.rb")
+    out, _err, _status = heckle("Squarer", "square", "-n", "if", "-v", "-t", "test/test_squarer_*.rb")
 
     assert_includes out, "debug: true"
-    assert_includes out, "Replacing Doubler#double with:"
+    assert_includes out, "Replacing Squarer#square with:"
     assert_includes out, "Tests failed -- this is good"
     assert_includes out, "3 runs, 3 assertions, 0 failures, 0 errors, 0 skips"
   end
@@ -670,13 +670,13 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   FORK_COMMANDS = [
-    %w[Doubler double],
-    ["Doubler", "double", *PARTIAL],
-    ["Doubler", *PARTIAL],
+    %w[Squarer square],
+    ["Squarer", "square", *PARTIAL],
+    ["Squarer", *PARTIAL],
     ["Tally", *TALLY],
     %w[Halver -t test/units/*_test.rb],
     %w[Money -t test/money_test.rb],
-    %w[Doubler double --force --tests broken/broken_doubler_test.rb],
+    %w[Squarer square --force --tests broken/broken_squarer_test.rb],
     %w[Gauge],
   ].freeze
 
@@ -696,12 +696,12 @@ class TestHecklePrismRunner < Minitest::Test
   # each gave. fixtures/output_3.0.0 holds what 3.0.0 printed for them,
   # put through strip_replacements and with its checkout's path as ROOT.
   UNCHANGED_COMMANDS = {
-    "doubler_double" => [%w[Doubler double], 0],
-    "doubler_double_partial" => [["Doubler", "double", *PARTIAL], 1],
-    "doubler_partial" => [["Doubler", *PARTIAL], 1],
+    "squarer_square" => [%w[Squarer square], 0],
+    "squarer_square_partial" => [["Squarer", "square", *PARTIAL], 1],
+    "squarer_partial" => [["Squarer", *PARTIAL], 1],
     "tally" => [["Tally", *TALLY], 0],
     "halver_units" => [%w[Halver -t test/units/*_test.rb], 1],
-    "doubler_double_forced" => [%w[Doubler double --force --tests broken/broken_doubler_test.rb], 0],
+    "squarer_square_forced" => [%w[Squarer square --force --tests broken/broken_squarer_test.rb], 0],
     "gauge" => [%w[Gauge], 0],
   }.freeze
 
@@ -726,7 +726,7 @@ class TestHecklePrismRunner < Minitest::Test
 
   def test_fork_unsupported_aborts
     script = "class << Process; undef_method :fork; end; load #{BIN.dump}"
-    out, err, status = Open3.capture3(RbConfig.ruby, "-e", script, "Doubler", "double", "--fork", chdir: PROJECT)
+    out, err, status = Open3.capture3(RbConfig.ruby, "-e", script, "Squarer", "square", "--fork", chdir: PROJECT)
 
     refute status.success?
     assert_equal ["--fork needs Process.fork, which this Ruby does not have"], err.lines.map(&:chomp)
@@ -743,10 +743,10 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_parse_args_fork
-    options, rest, out = parse("--fork", "Doubler")
+    options, rest, out = parse("--fork", "Squarer")
 
     assert_equal true, options[:fork]
-    assert_equal %w[Doubler], rest
+    assert_equal %w[Squarer], rest
     assert_equal "", out
   end
 
@@ -754,16 +754,16 @@ class TestHecklePrismRunner < Minitest::Test
     saved = HecklePrism.fork?
     capture_io { HecklePrismRunner.parse_args(%w[--fork]) }
     assert_equal true, HecklePrism.fork?
-    capture_io { HecklePrismRunner.parse_args(%w[Doubler]) }
+    capture_io { HecklePrismRunner.parse_args(%w[Squarer]) }
     assert_equal false, HecklePrism.fork?
   ensure
     HecklePrism.fork = saved
   end
 
   def test_parse_args_defaults
-    options, rest, out = parse("Doubler", "double")
+    options, rest, out = parse("Squarer", "square")
 
-    assert_equal %w[Doubler double], rest
+    assert_equal %w[Squarer square], rest
     assert_equal HecklePrism::MUTATABLE_NODES, options[:nodes]
     assert_equal %w[test/**/test_*.rb test/**/*_test.rb], options[:test_pattern]
     assert_equal false, options[:force]
@@ -776,29 +776,29 @@ class TestHecklePrismRunner < Minitest::Test
   end
 
   def test_parse_args_memory_limit
-    options, rest, out = parse("--memory-limit", "300", "Doubler")
+    options, rest, out = parse("--memory-limit", "300", "Squarer")
 
     assert_equal 300, options[:memory_limit]
-    assert_equal %w[Doubler], rest
+    assert_equal %w[Squarer], rest
     assert_equal "", out
   end
 
   def test_parse_args_single_tests_option_replaces_the_defaults
-    options, _rest, _out = parse("-t", "spec/*_spec.rb", "Doubler")
+    options, _rest, _out = parse("-t", "spec/*_spec.rb", "Squarer")
 
     assert_equal %w[spec/*_spec.rb], options[:test_pattern]
   end
 
   def test_parse_args_tests_option_accumulates
-    options, rest, _out = parse("-t", "test/models/a*_test.rb", "Doubler", "--tests", "test/models/b_test.rb")
+    options, rest, _out = parse("-t", "test/models/a*_test.rb", "Squarer", "--tests", "test/models/b_test.rb")
 
     assert_equal %w[test/models/a*_test.rb test/models/b_test.rb], options[:test_pattern]
-    assert_equal %w[Doubler], rest
+    assert_equal %w[Squarer], rest
   end
 
   def test_parse_args_leaves_timeout_guess_unless_given
     guess = HecklePrism.guess_timeout?
-    parse("Doubler")
+    parse("Squarer")
 
     assert_equal guess, HecklePrism.guess_timeout?
   end

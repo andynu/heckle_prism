@@ -3,7 +3,7 @@ Memory limit set to N MB.
 Initial tests pass. Let's rumble.
 
 **********************************************************************
-***  Doubler#double loaded with 5 possible mutations
+***  Squarer#square loaded with 5 possible mutations
 **********************************************************************
 
 5 mutations remaining...
@@ -16,11 +16,11 @@ The following mutations didn't cause test failures:
 
 --- original
 +++ mutation
- def double x
-   if Numeric === x
-     x * 2
+ def square(n)
+   if n.is_a?(Numeric)
+     n ** 2
    else
--    "NaN"
+-    "not a number"
 +
    end
  end
