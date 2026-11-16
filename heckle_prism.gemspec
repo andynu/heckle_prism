@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.4.0"
 
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z lib bin README.txt History.txt`.split("\x0")
+    `git ls-files -z lib bin README.txt CHANGELOG.md`.split("\x0")
   end
   spec.bindir = "bin"
   spec.executables = ["heckle_prism"]
