@@ -421,59 +421,56 @@ class HecklePrism
     min..max
   end
 
+  ##
+  # Prints a heckle run to $stdout. validate calls these methods in the
+  # order of the run; override any of them to report elsewhere.
+
   class Reporter
+    # Width of the rules framing warning and info.
+    RULE = 70
+
     def no_mutations(klass_name, method_name)
-      warning "#{klass_name}\##{method_name} has a thick skin. There's nothing to heckle."
+      warning "#{klass_name}##{method_name} has a thick skin. There's nothing to heckle."
     end
 
-    def method_loaded(klass_name, method_name, mutations_left)
-      info "#{klass_name}\##{method_name} loaded with #{mutations_left} possible mutations"
+    def method_loaded(klass_name, method_name, count)
+      info "#{klass_name}##{method_name} loaded with #{count} possible mutations"
     end
 
-    def remaining_mutations(mutations_left)
-      puts "#{mutations_left} mutations remaining..."
+    def remaining_mutations(left)
+      puts "#{left} mutations remaining..."
     end
 
-    def warning(message)
-      puts "!" * 70
-      puts "!!! #{message}"
-      puts "!" * 70
-      puts
+    def warning(text)
+      framed "!", "!!! #{text}"
     end
 
-    def info(message)
-      puts "*"*70
-      puts "***  #{message}"
-      puts "*"*70
-      puts
+    def info(text)
+      framed "*", "***  #{text}"
     end
 
     def no_failures
-      puts
-      puts "The following mutations didn't cause test failures:"
-      puts
+      puts "", "The following mutations didn't cause test failures:", ""
     end
 
-    def diff(original, mutation)
-      length = [original.split(/\n/).size, mutation.split(/\n/).size].max
+    ##
+    # Prints +mutant+ against +original+ as a unified diff with the whole
+    # method as context, less the hunk header.
 
-      Tempfile.open("orig") do |a|
-        a.puts(original)
-        a.flush
+    def diff(original, mutant)
+      context = [original, mutant].map { |text| text.lines.size }.max
 
-        Tempfile.open("fail") do |b|
-          b.puts(mutation)
-          b.flush
-
-          output = `#{HecklePrism::DIFF} -U #{length} --label original #{a.path} --label mutation #{b.path}`
-          puts output.sub(/^@@.*?\n/, '')
+      with_file(original) do |before|
+        with_file(mutant) do |after|
+          command = [DIFF, "-U", context.to_s, "--label", "original", before, "--label", "mutation", after]
+          puts IO.popen(command, &:read).sub(/^@@[^\n]*\n/, "")
           puts
         end
       end
     end
 
-    def failure(original, failure)
-      self.diff original, failure
+    def failure(original, mutant)
+      diff(original, mutant)
     end
 
     ##
@@ -490,7 +487,7 @@ class HecklePrism
     end
 
     def no_surviving_mutants
-      puts "No mutants survived. Cool!\n\n"
+      puts "No mutants survived. Cool!", ""
     end
 
     ##
@@ -510,13 +507,29 @@ class HecklePrism
         .map { |reason, words| "#{not_judged[reason]} #{words}" }.join(", ")
     end
 
-    def replacing(klass_name, method_name, original, src)
-      puts "Replacing #{klass_name}##{method_name} with:\n\n"
-      diff(original, src)
+    def replacing(klass_name, method_name, original, mutant)
+      puts "Replacing #{klass_name}##{method_name} with:", ""
+      diff(original, mutant)
     end
 
     def report_test_failures
       puts "Tests failed -- this is good" if HecklePrism.debug
+    end
+
+    private
+
+    def framed(char, line)
+      rule = char * RULE
+      puts rule, line, rule, ""
+    end
+
+    # Yields the path of a temporary file holding +text+.
+    def with_file(text)
+      Tempfile.create("heckle_prism") do |file|
+        file.puts(text)
+        file.flush
+        yield file.path
+      end
     end
   end
 
