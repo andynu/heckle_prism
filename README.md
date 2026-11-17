@@ -1,5 +1,12 @@
 # heckle_prism
 
+> For mutation testing in a real project, use
+> [mutineer](https://github.com/davidteren/mutineer) instead. It is also
+> built on Prism, is published on rubygems.org, supports Minitest and
+> RSpec, picks the tests to run from coverage and runs mutants in
+> parallel. heckle_prism was mostly a test of what an LLM could do with
+> an old codebase under direction, and it is not meant to compete.
+
 heckle_prism is a mutation tester for Ruby and Minitest, built on Prism.
 Below, "heckle" in prose means this program; the command, the gem and
 the classes are named heckle_prism and HecklePrism.
