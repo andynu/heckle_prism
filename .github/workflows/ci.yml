@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.4", "4.0"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      # test_consumer_project runs bundle exec inside this fixture, which has
+      # its own Gemfile and no committed lockfile.
+      - name: Install consumer fixture bundle
+        working-directory: test/fixtures/consumer_project
+        run: bundle install
+      - run: bundle exec rake test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+      - run: gem build heckle_prism.gemspec
+      - uses: actions/upload-artifact@v7
+        with:
+          name: heckle_prism-gem
+          path: "*.gem"
+          if-no-files-found: error
