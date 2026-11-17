@@ -242,12 +242,29 @@ two arguments as before otherwise.
 
 ## Using heckle in a project
 
-heckle_prism is not published as a gem. Add it to the project's
-Gemfile by path:
+heckle_prism is not published to rubygems.org. Bundler can install it
+from this GitHub repository instead:
+
+```ruby
+gem "heckle_prism", github: "andynu/heckle_prism", group: :test
+```
+
+Bundler clones the repository, builds the gem from heckle_prism.gemspec
+and records the commit in Gemfile.lock. `bundle update heckle_prism`
+moves to the newest commit on main. To stay on one version, add
+`tag: "v4.0.0"`, `branch: "main"` or `ref: "<sha>"`.
+
+To use a local checkout instead, for example while changing heckle_prism
+itself, add it by path:
 
 ```ruby
 gem "heckle_prism", path: "/path/to/heckle_prism", group: :test
 ```
+
+The GitHub Actions workflow runs the test suite on Ruby 3.4 and 4.0 and
+builds the gem. The .gem it uploads is a workflow artifact on the run's
+page. It expires and cannot be a Bundler source, so use one of the lines
+above to install.
 
 Run bundle install, then run heckle_prism with bundle exec from the project
 root:
@@ -531,8 +548,8 @@ ruby2ruby, ParseTree and ruby_parser are no longer used.
 
 ## Install
 
-- Add the Gemfile line under [Using heckle in a project](#using-heckle-in-a-project),
-  or run bin/heckle_prism from a checkout.
+- Add one of the Gemfile lines under [Using heckle in a project](#using-heckle-in-a-project),
+  either from GitHub or by path, or run bin/heckle_prism from a checkout.
 
 ## License
 
